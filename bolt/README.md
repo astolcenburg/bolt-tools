@@ -14,6 +14,7 @@ Bolt is a Node.js script and requires no installation. To fully utilize it, you'
 * rsync
 * umoci
 * mkfs.erofs
+* fsck.erofs
 * veritysetup
 * zip
 * ssh
@@ -27,20 +28,43 @@ Run `bolt` with one of the commands described below:
 
 ```
 Usage:
-bolt diff <bottom-oci-image.tar> <top-oci-image.tar> <layer.tgz>    generate a layer that, when combined with the bottom
-                                                                    image layer, will create the top image layer
-bolt extract <oci-image.tar> <layer.tgz>                            extract the top layer from the image
-bolt pack <config.json> <layer.tgz>                                 pack the configuration file and layer into a package
-bolt push <remote> <package-name>                                   push the package to the remote device
-bolt run <remote> <package-name>                                    run the package on the remote device
+  bolt make <target> [--install] [--force-install]
+      Build a bolt package using <target>.bolt.json
+      --install       Also installs the package into the Local Package Store
+      --force-install Installs the package, overwriting any existing package with the same name
+
+  bolt diff <bottom-oci-image.tar> <top-oci-image.tar> <layer.tgz>
+      Create a diff layer that transforms the bottom image into the top image
+
+  bolt extract <oci-image.tar> <layer.tgz>
+      Extract the top filesystem layer from an OCI image
+
+  bolt pack <config.json> <layer.tgz>
+      Combine a package config and a rootfs layer into a bolt package
+
+  bolt push <remote> <package-name>
+      Copy a bolt package to a remote device via SSH
+
+  bolt run <remote> <package-name>
+      Execute a bolt package on a remote device
 
 Where:
-oci-image.tar - an image compliant with the "OCI Image Format Specification" packaged as a tarball
-layer.tgz     - a rootfs layer packed as a gzip compressed tarball file
-config.json   - a configuration file compliant with https://github.com/rdkcentral/oci-package-spec/blob/main/metadata.md
-remote        - name of the device accessible via SSH in non-interactive mode
-package-name  - name of the package that was generated using the pack command
+  target        Basename of a file named <target>.bolt.json, which defines build instructions
+                see https://github.com/rdkcentral/bolt-tools/blob/main/bolt/docs/make.md
+
+  oci-image.tar An OCI-compliant image packaged as a tarball
+
+  layer.tgz     A rootfs layer packaged as a gzip-compressed tarball
+
+  config.json   A package config file compliant with
+                https://github.com/rdkcentral/oci-package-spec/blob/main/metadata.md
+
+  remote        Hostname or alias of a device accessible via SSH in non-interactive mode
+
+  package-name  Name of a bolt package generated using the pack command
 ```
+
+A detailed description of the `bolt make` command can be found in the [docs/make.md](docs/make.md) file.
 
 ## Example
 
