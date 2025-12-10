@@ -150,8 +150,8 @@ async function makeCommand(packageAlias, workDir, options) {
       extract(bitbakeMakeOCIImage(packageBoltConfig.bitbake), contentFile);
     }
   } else if (packageBoltConfig?.direct?.empty) {
-    contentFile = workDir + '/empty.tar';
-    exec(`tar -cf ${contentFile} --files-from /dev/null`);
+    contentFile = workDir + '/empty.tgz';
+    exec(`tar czf ${contentFile} --files-from /dev/null`);
   }
 
   if (contentFile) {
