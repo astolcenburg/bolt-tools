@@ -126,6 +126,10 @@ class Package {
     return this.path;
   }
 
+  isCompatible(platform) {
+    return this.getConfig().isCompatible(platform);
+  }
+
   getOCIDir() {
     if (!this.ociDir) {
       const ociDir = this.workDir + '/' + this.fullName;

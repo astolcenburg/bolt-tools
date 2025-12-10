@@ -17,7 +17,7 @@
  * limitations under the License.
 */
 
-const { statSync, rmSync, readFileSync } = require('node:fs');
+const { statSync, rmSync, readFileSync, mkdirSync } = require('node:fs');
 const { assert } = require('node:console');
 const { exec, printError, makeWorkDir, linkOrCopySync } = require('./utils.cjs');
 const { pack } = require('./pack.cjs');
@@ -27,6 +27,8 @@ const { PackageStore } = require('./PackageStore.cjs');
 const { PackageConfigStore } = require('./PackageConfigStore.cjs');
 const { PackageBuilder } = require('./PackageBuilder.cjs');
 const { PackageDependencyResolver } = require('./PackageDependencyResolver.cjs');
+const { PackageConfig } = require('./PackageConfig.cjs');
+const { PackageConfigBuilder } = require('./PackageConfigBuilder.cjs');
 
 class PackageProvider {
   constructor(packageStore, configStore) {
@@ -105,6 +107,8 @@ async function makeCommand(packageAlias, workDir, options) {
     throw new Error(`Package config for ${packageAlias} not found!`);
   }
 
+  const packageConfigBuilder = new PackageConfigBuilder(packageConfig);
+
   let packageStore;
   const constructPackageStore = function () {
     if (!packageStore) {
@@ -130,24 +134,29 @@ async function makeCommand(packageAlias, workDir, options) {
 
     assert(last.getFullName() === packageConfig.getFullName());
 
+    contentFile = packageRootfsDir + ".tgz";
+    const platform = PackageConfig.makePlatformConfigFromOCIImageConfig(
+      extract(bitbakeMakeOCIImage(packageBoltConfig.bitbake), contentFile, { returnConfig: true })
+    );
+    packageConfigBuilder.setPlatform(platform);
+
     if (packages.length) {
+      const packageRootfsArchive = contentFile;
+      mkdirSync(packageRootfsDir, { recursive: true });
+      exec(`tar xf ${packageRootfsArchive} -C ${packageRootfsDir}`);
+
       const packageBuilder = new PackageBuilder(`${workDir}/${packageConfig.getFullName()}`);
 
       for (const pkg of packages) {
+        if (!pkg.isCompatible(platform)) {
+          throw new Error(`Package ${pkg.getFullName()} is prepared for platform incompatible with ${JSON.stringify(platform)}`);
+        }
         packageBuilder.merge(pkg.getLayerDir());
       }
-
-      const packageRootfsArchive = packageRootfsDir + ".tgz";
-      extract(bitbakeMakeOCIImage(packageBoltConfig.bitbake), packageRootfsArchive);
-      exec(`mkdir -p ${packageRootfsDir}`);
-      exec(`tar xf ${packageRootfsArchive} -C ${packageRootfsDir}`);
 
       packageBuilder.merge(packageRootfsDir);
       packageBuilder.finish(packageLayerArchive);
       contentFile = packageLayerArchive;
-    } else {
-      contentFile = packageRootfsDir + ".tgz";
-      extract(bitbakeMakeOCIImage(packageBoltConfig.bitbake), contentFile);
     }
   } else if (packageBoltConfig?.direct?.empty) {
     contentFile = workDir + '/empty.tgz';
@@ -155,7 +164,11 @@ async function makeCommand(packageAlias, workDir, options) {
   }
 
   if (contentFile) {
-    await pack(packageConfig.getPath(), contentFile);
+    const packageConfigPath = `${workDir}/${packageConfig.getFullName()}.json`;
+    packageConfigBuilder
+      .updateVersionNameIfNotSpecified(packageConfigStore.getPath())
+      .store(packageConfigPath);
+    await pack(packageConfigPath, contentFile);
     if (options.install) {
       const packageFileName = Package.makeFileName(packageConfig.getFullName());
       try {

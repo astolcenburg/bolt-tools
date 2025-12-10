@@ -29,7 +29,7 @@ class PackageConfig {
     if ((config.packageType === "base" || config.packageType === "runtime" || config.packageType === "application") &&
       typeof config.id === "string" &&
       typeof config.version === "string" &&
-      typeof config.versionName === "string" &&
+      typeof config.entryPoint === "string" &&
       typeof config.name === "string") {
       return;
     } else {
@@ -50,6 +50,23 @@ class PackageConfig {
 
   static makeFullName(id, version) {
     return id + "+" + version;
+  }
+
+  static makePlatformConfigFromOCIImageConfig(ociImageConfig) {
+    if (!ociImageConfig.architecture || !ociImageConfig.os) {
+      throw new Error("Invalid OCI Image - no 'architecture' and/or 'os' specified in the config!");
+    }
+
+    const platform = {
+      architecture: ociImageConfig.architecture,
+      os: ociImageConfig.os,
+    };
+
+    if (ociImageConfig.variant) {
+      platform.variant = ociImageConfig.variant;
+    }
+
+    return platform;
   }
 
   getFullName() {
@@ -81,6 +98,24 @@ class PackageConfig {
 
   getPath() {
     return this.path;
+  }
+
+  isCompatible(platform) {
+    let result = false;
+
+    const packagePlatform = this.data?.configuration?.["urn:rdk:config:platform"];
+
+    if (packagePlatform) {
+      result = packagePlatform?.architecture === platform?.architecture && packagePlatform?.os === platform?.os;
+      if (result && packagePlatform?.variant !== platform?.variant) {
+        console.warn(`Packages use different arch variants: ${packagePlatform?.variant} vs. ${platform?.variant}`);
+      }
+    } else {
+      // for backward compatibility treat packages with no platform declaration as compatible
+      result = true;
+    }
+
+    return result;
   }
 }
 

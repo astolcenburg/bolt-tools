@@ -20,7 +20,9 @@
 const { mkdirSync, readFileSync, rmSync } = require('node:fs');
 const { exec, moveSync } = require('./utils.cjs');
 
-function extract(image, output) {
+function extract(image, output, options) {
+  let result;
+
   const dir = exec(`mktemp -d -p .`).trim();
   mkdirSync(dir + "/oci", { recursive: true });
   exec(`tar xf ${image} -C ${dir}/oci`);
@@ -32,9 +34,16 @@ function extract(image, output) {
   const [overlayAlgo, overlayDigest] = manifest.layers.at(-1).digest.split(':');
   moveSync(`${dir}/oci/blobs/${overlayAlgo}/${overlayDigest}`, output);
 
+  if (options?.returnConfig) {
+    const [configAlgo, configDigest] = manifest.config.digest.split(':');
+    result = JSON.parse(readFileSync(`${dir}/oci/blobs/${configAlgo}/${configDigest}`));
+  }
+
   rmSync(dir, { recursive: true, force: true });
 
   console.log(`Extracted ${output} from ${image}`);
+
+  return result;
 }
 
 exports.extract = extract;
