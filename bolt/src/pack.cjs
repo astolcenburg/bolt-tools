@@ -129,7 +129,7 @@ async function packInternal(content, config, output) {
 
   writeFileSync(output + '/index.json', JSON.stringify(index, null, 2));
   writeFileSync(output + '/oci-layout', '{"imageLayoutVersion": "1.0.0"}');
-  exec(`cd ${output} && zip -r ../${output}.bolt .`);
+  exec(`zip -r -0 '../${output}.bolt' .`, { cwd: output });
 }
 
 exports.pack = pack;
