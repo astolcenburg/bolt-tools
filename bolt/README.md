@@ -45,10 +45,12 @@ Usage:
   bolt push <remote> <package-name>
       Copy a bolt package to a remote device via SSH
 
-  bolt run <remote> <package-name>
+  bolt run <remote> <package-name> [option]
       Execute a bolt package on a remote device
       --develop              Run with elevated privileges to simplify debugging
       --clear-storage        Clear persistent storage before running the package
+      --rw-overlay=<true/false>
+          Enable/disable read/write layer over the package rootfs
       --uid=<uid>            Run with the specified user ID
       --gid=<gid>            Run with the specified group ID
       --userns=<true/false>  Enable/disable user namespace

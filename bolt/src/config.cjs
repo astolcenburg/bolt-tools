@@ -27,3 +27,4 @@ exports.AI2_MANAGERS_ENABLED_FILE = "/opt/ai2managers";
 // select random UID and GID (34567) to avoid conflicts with existing users/groups
 exports.DEFAULT_UID = 34567;
 exports.DEFAULT_GID = 34567;
+exports.PROCESS_HOME_DIR = "/home";

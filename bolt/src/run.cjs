@@ -169,6 +169,9 @@ function setupResources(remote, pkg) {
 function prepareBundle(remote, pkg, bundleConfig, layers, options) {
   const bundleDir = remote.getPkgBundleDir(pkg);
   const bundleRootfsDir = bundleDir + "/rootfs";
+  const rwOverlay = options.rwOverlay ?? true;
+  let upperDirMount = "";
+  let rwDirs;
 
   if (remote.isMounted(bundleRootfsDir)) {
     remote.unmount(bundleRootfsDir);
@@ -178,10 +181,31 @@ function prepareBundle(remote, pkg, bundleConfig, layers, options) {
     remote.rmdir(`${bundleDir}`);
   }
 
-  remote.mkdir(`${bundleRootfsDir} ${bundleDir}/rw/{upper,work}`);
-  remote.exec(`chmod 777 ${bundleDir}/rw/{upper,work}`);
+  bundleConfig.process.env.push('HOME=' + config.PROCESS_HOME_DIR);
 
-  remote.exec(`mount -t overlay overlay -o lowerdir=${layers.join(":")},upperdir=${bundleDir}/rw/upper,workdir=${bundleDir}/rw/work ${bundleRootfsDir}`);
+  if (rwOverlay) {
+    rwDirs = `${bundleDir}/rw/work ${bundleDir}/rw/upper${config.PROCESS_HOME_DIR}`;
+    upperDirMount = `,upperdir=${bundleDir}/rw/upper,workdir=${bundleDir}/rw/work`;
+  } else {
+    rwDirs = `${bundleDir}${config.PROCESS_HOME_DIR}`;
+    bundleConfig.mounts.push({
+      source: rwDirs,
+      destination: config.PROCESS_HOME_DIR,
+      type: "bind",
+      options: [
+        "rbind",
+        "nosuid",
+        "nodev",
+        "rw"
+      ]
+    });
+  }
+
+  remote.mkdir(`${bundleRootfsDir} ${rwDirs}`);
+  remote.exec(`chown ${bundleConfig.process.user.uid}:${bundleConfig.process.user.gid} ${rwDirs}`);
+  remote.exec(`chmod 700 ${rwDirs}`);
+
+  remote.exec(`mount -t overlay overlay -o lowerdir=${layers.join(":")}${upperDirMount} ${bundleRootfsDir}`);
   remote.storeObject(`${bundleDir}/config.json`, bundleConfig);
 }
 
@@ -388,5 +412,27 @@ exports.runOptions = {
       return true;
     }
     return false;
+  },
+
+  "rw-overlay"(params, result) {
+    const paramValue = params.options["rw-overlay"];
+    let rwOverlay;
+
+    switch (paramValue) {
+      case "true":
+        rwOverlay = true;
+        break;
+      case "false":
+        rwOverlay = false;
+        break;
+      default:
+        return false;
+    }
+
+    Object.assign(result, {
+      rwOverlay,
+    });
+
+    return true;
   },
 };
