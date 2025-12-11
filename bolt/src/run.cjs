@@ -166,7 +166,7 @@ function setupResources(remote, pkg) {
   }
 }
 
-function prepareBundle(remote, pkg, bundleConfig, layers) {
+function prepareBundle(remote, pkg, bundleConfig, layers, options) {
   const bundleDir = remote.getPkgBundleDir(pkg);
   const bundleRootfsDir = bundleDir + "/rootfs";
 
@@ -174,10 +174,12 @@ function prepareBundle(remote, pkg, bundleConfig, layers) {
     remote.unmount(bundleRootfsDir);
   }
 
-  /* remove mount points inside /usr/lib in rw overlay to cleanup leftovers from previous runs */
-  remote.rmdir(`${bundleDir}/rw/upper/usr/lib`);
+  if (options.clearStorage) {
+    remote.rmdir(`${bundleDir}`);
+  }
 
   remote.mkdir(`${bundleRootfsDir} ${bundleDir}/rw/{upper,work}`);
+  remote.exec(`chmod 777 ${bundleDir}/rw/{upper,work}`);
 
   remote.exec(`mount -t overlay overlay -o lowerdir=${layers.join(":")},upperdir=${bundleDir}/rw/upper,workdir=${bundleDir}/rw/work ${bundleRootfsDir}`);
   remote.storeObject(`${bundleDir}/config.json`, bundleConfig);
@@ -251,7 +253,7 @@ function addDeviceGPULayer(remote, bundleConfig, layerDirs) {
   return result;
 }
 
-function run(remoteName, pkg) {
+function run(remoteName, pkg, options) {
   const remote = new Remote(remoteName);
 
   const configs = getConfigs(remote, pkg);
@@ -260,7 +262,7 @@ function run(remoteName, pkg) {
   console.log(`Running ${pkg} using:`);
   console.log(`${JSON.stringify(configs, null, 2)}`);
 
-  const bundleConfig = makeTemplate();
+  const bundleConfig = makeTemplate(options);
   for (const { pkg, config } of configs) {
     if (config.entryPoint) {
       bundleConfig.process.args.push(config.entryPoint);
@@ -308,7 +310,7 @@ function run(remoteName, pkg) {
   }
 
   layerDirs.reverse();
-  prepareBundle(remote, pkg, bundleConfig, layerDirs);
+  prepareBundle(remote, pkg, bundleConfig, layerDirs, options);
 
   if (!remote.socketExists(rialtoSocketPath)) {
     console.warn('\n\n\x1b[31mRialto socket not available! Playback not supported!\x1b[0m\n\n');
@@ -322,3 +324,69 @@ function run(remoteName, pkg) {
 }
 
 exports.run = run;
+
+exports.runOptions = {
+  develop(params, result) {
+    if (params.options.develop === "") {
+      Object.assign(result, {
+        uid: result.uid ?? 0,
+        gid: result.gid ?? 0,
+        userns: result.userns ?? false,
+      });
+      return true;
+    }
+    return false;
+  },
+
+  uid(params, result) {
+    if (params.options.uid) {
+      Object.assign(result, {
+        uid: +params.options.uid,
+      });
+      return true;
+    }
+    return false;
+  },
+
+  gid(params, result) {
+    if (params.options.gid) {
+      Object.assign(result, {
+        gid: +params.options.gid,
+      });
+      return true;
+    }
+    return false;
+  },
+
+  userns(params, result) {
+    const userns = params.options.userns;
+    let value;
+
+    switch (userns) {
+      case "true":
+        value = true;
+        break;
+      case "false":
+        value = false;
+        break;
+      default:
+        return false;
+    }
+
+    Object.assign(result, {
+      userns: value,
+    });
+
+    return true;
+  },
+
+  "clear-storage"(params, result) {
+    if (params.options["clear-storage"] === "") {
+      Object.assign(result, {
+        clearStorage: true,
+      });
+      return true;
+    }
+    return false;
+  },
+};

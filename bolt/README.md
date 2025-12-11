@@ -47,6 +47,11 @@ Usage:
 
   bolt run <remote> <package-name>
       Execute a bolt package on a remote device
+      --develop              Run with elevated privileges to simplify debugging
+      --clear-storage        Clear persistent storage before running the package
+      --uid=<uid>            Run with the specified user ID
+      --gid=<gid>            Run with the specified group ID
+      --userns=<true/false>  Enable/disable user namespace
 
 Where:
   target        Basename of a file named <target>.bolt.json, which defines build instructions

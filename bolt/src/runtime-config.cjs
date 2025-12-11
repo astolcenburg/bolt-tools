@@ -17,13 +17,15 @@
  * limitations under the License.
 */
 
+const config = require('./config.cjs');
+
 const template = {
   "ociVersion": "1.0.2",
   "process": {
     "terminal": true,
     "user": {
-      "uid": 0,
-      "gid": 0
+      "uid": config.DEFAULT_UID,
+      "gid": config.DEFAULT_GID,
     },
     "args": [
     ],
@@ -197,18 +199,8 @@ const template = {
   },
   "linux": {
     "uidMappings": [
-      {
-        "containerID": 0,
-        "hostID": 1000,
-        "size": 1
-      }
     ],
     "gidMappings": [
-      {
-        "containerID": 0,
-        "hostID": 1000,
-        "size": 1
-      }
     ],
     "namespaces": [
       {
@@ -255,8 +247,33 @@ const template = {
 };
 
 
-function makeTemplate() {
-  return template;
+function makeTemplate(options) {
+  const result = JSON.parse(JSON.stringify(template));
+
+  if (options.uid !== undefined || options.gid !== undefined) {
+    result.process.user.uid = options.uid ?? config.DEFAULT_UID;
+    result.process.user.gid = options.gid ?? config.DEFAULT_GID;
+  }
+
+  if (options.userns ?? true) {
+    result.linux.namespaces.push({
+      type: "user",
+    });
+
+    result.linux.uidMappings.push({
+      containerID: result.process.user.uid,
+      hostID: result.process.user.uid,
+      size: 1,
+    });
+
+    result.linux.gidMappings.push({
+      containerID: result.process.user.gid,
+      hostID: result.process.user.gid,
+      size: 1,
+    });
+  }
+
+  return result;
 }
 
 function addDevice(config, path, type, major, minor) {
@@ -286,12 +303,17 @@ function hexToNumber(str) {
   throw new Error(`Cannot parse ${str} as hex number`);
 }
 
-function processDevNodeEntry(remote, config, devNode) {
+function processDevNodeEntry(remote, config, devNode, groupIds) {
   try {
-    const [perm, majorHex, minorHex] = remote.exec(`stat -c '%A:%t:%T' ${devNode}`).trim().split(":");
-    const type = perm[0];
-    if (type === "c" || type === "b") {
-      addDevice(config, devNode, type, hexToNumber(majorHex), hexToNumber(minorHex));
+    const [perm, majorHex, minorHex, groupName] = remote.exec(`stat -c '%A:%t:%T:%G' ${devNode}`).trim().split(":");
+    if (perm.length === 10 && (perm[0] === "c" || perm[0] === "b")) {
+      addDevice(config, devNode, perm[0], hexToNumber(majorHex), hexToNumber(minorHex));
+      if (perm[7] === "r" && perm[8] === "w") {
+      } else if (groupIds.includes(groupName) && perm[4] === "r" && perm[5] === "w") {
+      } else {
+        console.warn(`Changing access rights for ${devNode}! (was ${perm}, group: ${groupName})`);
+        remote.exec(`chmod a+rw ${devNode}`);
+      }
     } else {
       throw new Error(`not a device (perm: ${perm})`);
     }
@@ -352,7 +374,7 @@ function applyGPUConfig(remote, config, gpuConfig) {
   const groupIds = gpuConfig?.vendorGpuSupport?.groupIds ?? [];
 
   for (let node of devNodes) {
-    processDevNodeEntry(remote, config, node);
+    processDevNodeEntry(remote, config, node, groupIds);
   }
   for (let file of files) {
     processFileEntry(config, file);

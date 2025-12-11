@@ -22,7 +22,7 @@ const { diff } = require('./diff.cjs');
 const { extract } = require('./extract.cjs');
 const { pack } = require('./pack.cjs');
 const { push } = require('./push.cjs');
-const { run } = require('./run.cjs');
+const { run, runOptions } = require('./run.cjs');
 const { make, makeOptions } = require('./make.cjs');
 
 function help() {
@@ -47,6 +47,11 @@ Usage:
 
   bolt run <remote> <package-name>
       Execute a bolt package on a remote device
+      --develop              Run with elevated privileges to simplify debugging
+      --clear-storage        Clear persistent storage before running the package
+      --uid=<uid>            Run with the specified user ID
+      --gid=<gid>            Run with the specified group ID
+      --userns=<true/false>  Enable/disable user namespace
 
 Where:
   target        Basename of a file named <target>.bolt.json, which defines build instructions
@@ -72,7 +77,7 @@ const commands = {
   extract: { args: 2, handler: extract },
   pack: { args: 2, handler: pack },
   push: { args: 2, handler: push },
-  run: { args: 2, handler: run },
+  run: { args: 2, handler: run, options: runOptions },
   make: { args: 1, handler: make, options: makeOptions },
 };
 
