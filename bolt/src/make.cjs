@@ -151,6 +151,9 @@ async function makeCommand(packageAlias, workDir, options) {
         if (!pkg.isCompatible(platform)) {
           throw new Error(`Package ${pkg.getFullName()} is prepared for platform incompatible with ${JSON.stringify(platform)}`);
         }
+        if (!pkg.isReleaseVersion()) {
+          packageConfigBuilder.updateVersionNameWithCustomDependency(pkg);
+        }
         packageBuilder.merge(pkg.getLayerDir());
       }
 

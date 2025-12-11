@@ -118,6 +118,10 @@ class Package {
     return this.getConfig().getVersion();
   }
 
+  getVersionName() {
+    return this.getConfig().getVersionName();
+  }
+
   getDependencies() {
     return this.getConfig().getDependencies();
   }
@@ -128,6 +132,10 @@ class Package {
 
   isCompatible(platform) {
     return this.getConfig().isCompatible(platform);
+  }
+
+  isReleaseVersion() {
+    return this.getConfig().isReleaseVersion();
   }
 
   getOCIDir() {

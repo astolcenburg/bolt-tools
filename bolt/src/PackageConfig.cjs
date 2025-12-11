@@ -88,6 +88,10 @@ class PackageConfig {
     return this.data?.version ?? "";
   }
 
+  getVersionName() {
+    return this.data.versionName;
+  }
+
   getDependencies() {
     return this.data?.dependencies ?? {};
   }
@@ -116,6 +120,10 @@ class PackageConfig {
     }
 
     return result;
+  }
+
+  isReleaseVersion() {
+    return this.data.versionName === undefined || this.data.version === this.data.versionName;
   }
 }
 

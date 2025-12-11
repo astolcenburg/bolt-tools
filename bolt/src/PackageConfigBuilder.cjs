@@ -23,17 +23,43 @@ const { exec } = require('./utils.cjs');
 class PackageConfigBuilder {
   constructor(baseConfig) {
     this.data = baseConfig.data;
+    this.originalVersionName = this.data.versionName;
+    this.versionName = this.data.versionName ?? "";
+    this.versionNameSuffix = "";
+  }
+
+  updateVersionName() {
+    const versionName = this.versionName + this.versionNameSuffix;
+    if (this.data.versionName !== versionName) {
+      this.data = Object.assign({}, this.data, { versionName });
+    }
   }
 
   updateVersionNameIfNotSpecified(repoPath) {
-    if (!this.data.versionName || this.data.versionName === "develop") {
-      const versionName = exec('git describe --dirty 2>/dev/null || echo develop', { cwd: repoPath }).trim();
-      if (this.data.versionName !== versionName) {
-        this.data = Object.assign({}, this.data, { versionName });
-      }
+    if (!this.originalVersionName || this.originalVersionName === "develop") {
+      this.versionName = exec('git describe --dirty 2>/dev/null || echo develop', { cwd: repoPath }).trim();
+      this.updateVersionName();
     }
 
     return this;
+  }
+
+  updateVersionNameWithCustomDependency(pkg) {
+    const versionNameModifier = `/${pkg.getId()}+${pkg.getVersionName()}`;
+
+    if (versionNameModifier.length <= this.versionNameSuffix.length) {
+      if (!this.versionNameSuffix.includes(versionNameModifier)) {
+        this.versionNameSuffix += versionNameModifier;
+      }
+    } else {
+      if (!versionNameModifier.includes(this.versionNameSuffix)) {
+        this.versionNameSuffix += versionNameModifier;
+      } else {
+        this.versionNameSuffix = versionNameModifier;
+      }
+    }
+
+    this.updateVersionName();
   }
 
   setPlatform(platform) {
