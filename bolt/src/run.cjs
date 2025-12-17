@@ -184,7 +184,7 @@ function prepareBundle(remote, pkg, bundleConfig, layers, options) {
   bundleConfig.process.env.push('HOME=' + config.PROCESS_HOME_DIR);
 
   if (rwOverlay) {
-    rwDirs = `${bundleDir}/rw/work ${bundleDir}/rw/upper${config.PROCESS_HOME_DIR}`;
+    rwDirs = `${bundleDir}/rw/work ${bundleDir}/rw/upper ${bundleDir}/rw/upper${config.PROCESS_HOME_DIR}`;
     upperDirMount = `,upperdir=${bundleDir}/rw/upper,workdir=${bundleDir}/rw/work`;
   } else {
     rwDirs = `${bundleDir}${config.PROCESS_HOME_DIR}`;
