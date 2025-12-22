@@ -121,11 +121,18 @@ function add_deps {
 function main {
   local config_name
   local tmp_config
+  local platform
+  local firmware_version
 
-  config_name=$(get_platform)-$(get_version).json
+  platform=$(get_platform)
+  firmware_version=$(get_version)
 
-  if [[ ! -f "${config_name}" ]]; then
-    echo "File ${config_name} not found, platform not supported."
+  if [[ -f ${platform}-${firmware_version}.json ]]; then
+    config_name="${platform}-${firmware_version}.json"
+  elif [[ -f ${platform}.json ]]; then
+    config_name="${platform}.json"
+  else
+    echo "Config for platform ${platform} not found (${firmware_version})"
     exit 2
   fi
 
