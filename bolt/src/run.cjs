@@ -18,6 +18,7 @@
 */
 
 const { Remote } = require('./Remote.cjs');
+const runtime = require('./runtime-config.cjs');
 const { makeTemplate, applyGPUConfig } = require('./runtime-config.cjs');
 const config = require('./config.cjs');
 
@@ -302,45 +303,17 @@ function run(remoteName, pkg, options) {
   }
 
   setupResources(remote, pkg);
-
-  const waylandSocketPath = getWaylandSocketPath(pkg);
-  if (remote.socketExists(waylandSocketPath)) {
-    bundleConfig.mounts.push({
-      source: waylandSocketPath,
-      destination: waylandSocketPath,
-      type: "bind",
-      options: [
-        "rbind",
-        "rw"
-      ]
-    });
-    const pathArray = waylandSocketPath.split("/");
-    bundleConfig.process.env.push(`WAYLAND_DISPLAY=${pathArray.pop()}`);
-    bundleConfig.process.env.push(`XDG_RUNTIME_DIR=${pathArray.join("/")}`);
-  }
-
-  const rialtoSocketPath = getRialtoSocketPath(pkg);
-  if (remote.socketExists(rialtoSocketPath)) {
-    bundleConfig.mounts.push({
-      source: rialtoSocketPath,
-      destination: rialtoSocketPath,
-      type: "bind",
-      options: [
-        "rbind",
-        "rw"
-      ]
-    });
-    bundleConfig.process.env.push(`RIALTO_SOCKET_PATH=${rialtoSocketPath}`);
-  }
+  const waylandAvailable = runtime.configureWaylandSocket(remote, bundleConfig, getWaylandSocketPath(pkg));
+  const rialtoAvailable = runtime.configureRialtoSocket(remote, bundleConfig, getRialtoSocketPath(pkg));
 
   layerDirs.reverse();
   prepareBundle(remote, pkg, bundleConfig, layerDirs, options);
 
-  if (!remote.socketExists(rialtoSocketPath)) {
+  if (!rialtoAvailable) {
     console.warn('\n\n\x1b[31mRialto socket not available! Playback not supported!\x1b[0m\n\n');
   }
 
-  if (!remote.socketExists(waylandSocketPath)) {
+  if (!waylandAvailable) {
     console.warn('\n\n\x1b[31mWayland socket not available! Graphics rendering not available!\x1b[0m\n\n');
   }
 

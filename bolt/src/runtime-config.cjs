@@ -302,17 +302,21 @@ function hexToNumber(str) {
   throw new Error(`Cannot parse ${str} as hex number`);
 }
 
+function applyAccessRights(remote, groupIds, path, perm, groupName) {
+  if (perm[7] === "r" && perm[8] === "w") {
+  } else if (groupIds.includes(groupName) && perm[4] === "r" && perm[5] === "w") {
+  } else {
+    console.warn(`Changing access rights for ${path}! (was ${perm}, group: ${groupName})`);
+    remote.exec(`chmod a+rw ${path}`);
+  }
+}
+
 function processDevNodeEntry(remote, config, devNode, groupIds) {
   try {
     const [perm, majorHex, minorHex, groupName] = remote.exec(`stat -c '%A:%t:%T:%G' ${devNode}`).trim().split(":");
     if (perm.length === 10 && (perm[0] === "c" || perm[0] === "b")) {
       addDevice(config, devNode, perm[0], hexToNumber(majorHex), hexToNumber(minorHex));
-      if (perm[7] === "r" && perm[8] === "w") {
-      } else if (groupIds.includes(groupName) && perm[4] === "r" && perm[5] === "w") {
-      } else {
-        console.warn(`Changing access rights for ${devNode}! (was ${perm}, group: ${groupName})`);
-        remote.exec(`chmod a+rw ${devNode}`);
-      }
+      applyAccessRights(remote, groupIds, devNode, perm, groupName);
     } else {
       throw new Error(`not a device (perm: ${perm})`);
     }
@@ -386,5 +390,48 @@ function applyGPUConfig(remote, config, gpuConfig) {
   }
 }
 
+function configureWaylandSocket(remote, bundleConfig, waylandSocketPath) {
+  if (remote.socketExists(waylandSocketPath)) {
+    const [perm, groupName] = remote.exec(`stat -c '%A:%G' ${waylandSocketPath}`).trim().split(":");
+    applyAccessRights(remote, [], waylandSocketPath, perm, groupName);
+
+    bundleConfig.mounts.push({
+      source: waylandSocketPath,
+      destination: waylandSocketPath,
+      type: "bind",
+      options: [
+        "rbind",
+        "rw"
+      ]
+    });
+    const pathArray = waylandSocketPath.split("/");
+    bundleConfig.process.env.push(`WAYLAND_DISPLAY=${pathArray.pop()}`);
+    bundleConfig.process.env.push(`XDG_RUNTIME_DIR=${pathArray.join("/")}`);
+    return true;
+  }
+  return false;
+}
+
+function configureRialtoSocket(remote, bundleConfig, rialtoSocketPath) {
+  if (remote.socketExists(rialtoSocketPath)) {
+    const [perm, groupName] = remote.exec(`stat -c '%A:%G' ${rialtoSocketPath}`).trim().split(":");
+    applyAccessRights(remote, [], rialtoSocketPath, perm, groupName);
+    bundleConfig.mounts.push({
+      source: rialtoSocketPath,
+      destination: rialtoSocketPath,
+      type: "bind",
+      options: [
+        "rbind",
+        "rw"
+      ]
+    });
+    bundleConfig.process.env.push(`RIALTO_SOCKET_PATH=${rialtoSocketPath}`);
+    return true;
+  }
+  return false;
+}
+
 exports.makeTemplate = makeTemplate;
 exports.applyGPUConfig = applyGPUConfig;
+exports.configureWaylandSocket = configureWaylandSocket;
+exports.configureRialtoSocket = configureRialtoSocket;
