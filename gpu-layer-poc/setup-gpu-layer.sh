@@ -45,6 +45,12 @@ LIBS+=(/usr/lib/libGLESv2.so)
 LIBS+=(/usr/lib/libGLESv2.so.2)
 LIBS+=(/usr/lib/libwayland-egl.so.1)
 
+declare -A FILE_INFO_FALLBACK
+
+FILE_INFO_FALLBACK[/usr/lib/libEGL.so]="'libEGL.so' -> 'libEGL.so.1'"
+FILE_INFO_FALLBACK[/usr/lib/libGLESv1_CM.so]="'libGLESv1_CM.so' -> 'libGLESv1_CM.so.1'"
+FILE_INFO_FALLBACK[/usr/lib/libGLESv2.so]="'libGLESv2.so' -> 'libGLESv2.so.2'"
+
 BASE_LIBS+=(libwayland-server.so)
 BASE_LIBS+=(libwayland-client.so)
 BASE_LIBS+=(libdl.so)
@@ -138,7 +144,7 @@ function main {
     PROCESSED_LIBS_SET[${lib}]=1
 
     local file_info
-    file_info=$(remote stat -c '%N' "${lib}")
+    file_info=$(remote stat -c '%N' "${lib}" 2> /dev/null || echo "${FILE_INFO_FALLBACK[${lib}]}")
 
     echo "Processing ${lib}..."
 
