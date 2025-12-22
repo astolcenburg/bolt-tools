@@ -1,0 +1,21 @@
+{
+  "vendorGpuSupport": {
+    "devNodes": [
+      "/dev/nexus",
+      "/dev/nexusmem",
+      "/dev/dri/card0",
+      "/dev/dri/card1",
+      "/dev/dri/renderD128"
+    ],
+    "groupIds": [
+      "video"
+    ],
+    "files": [
+      {
+        "type": "bind",
+        "source": "/tmp/nxserver_ipc",
+        "destination": "/tmp/nxserver_ipc"
+      }
+    ]
+  }
+}
