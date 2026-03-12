@@ -23,6 +23,7 @@ exports.REMOTE_MOUNTS_DIR = "/data/bolt/mounts";
 exports.REMOTE_BUNDLES_DIR = "/data/bolt/bundles";
 exports.REMOTE_GPU_LAYER_FS = "/usr/share/gpu-layer/rootfs";
 exports.REMOTE_GPU_CONFIG = "/usr/share/gpu-layer/config.json";
+exports.REMOTE_TMP_DIR = "/tmp/bolt";
 exports.AI2_MANAGERS_ENABLED_FILE = "/opt/ai2managers";
 // select random UID and GID (34567) to avoid conflicts with existing users/groups
 exports.DEFAULT_UID = 34567;

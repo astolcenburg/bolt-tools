@@ -24,6 +24,8 @@ const { pack } = require('./pack.cjs');
 const { push } = require('./push.cjs');
 const { run, runOptions } = require('./run.cjs');
 const { make, makeOptions } = require('./make.cjs');
+const { install } = require('./install.cjs');
+const { launch } = require('./launch.cjs');
 
 function help() {
   console.log(`
@@ -81,6 +83,8 @@ const commands = {
   push: { args: 2, handler: push },
   run: { args: 2, handler: run, options: runOptions },
   make: { args: 1, handler: make, options: makeOptions },
+  install: { args: 2, handler: install },
+  launch: { args: 2, handler: launch },
 };
 
 function checkOptions(provided, allowed) {

@@ -26,6 +26,7 @@ class Remote {
 
   constructor(name) {
     this.name = name;
+    this.thunderRequestId = 100;
   }
 
   exec(command, params) {
@@ -153,7 +154,11 @@ class Remote {
   }
 
   makeThunderRequest(request) {
-    exec(`ssh ${this.name} curl http://127.0.0.1:9998/jsonrpc -d '${JSON.stringify(JSON.stringify(request))}'`);
+    request.jsonrpc = "2.0";
+    if (!request.id) {
+      request.id = ++this.thunderRequestId;
+    }
+    return exec(`ssh ${this.name} curl http://127.0.0.1:9998/jsonrpc -d '${JSON.stringify(JSON.stringify(request))}'`);
   }
 }
 
