@@ -20,7 +20,7 @@
 const params = require('./params.cjs');
 const { diff } = require('./diff.cjs');
 const { extract } = require('./extract.cjs');
-const { pack } = require('./pack.cjs');
+const { pack, packOptions } = require('./pack.cjs');
 const { push } = require('./push.cjs');
 const { run, runOptions } = require('./run.cjs');
 const { make, makeOptions } = require('./make.cjs');
@@ -28,10 +28,12 @@ const { make, makeOptions } = require('./make.cjs');
 function help() {
   console.log(`
 Usage:
-  bolt make <target> [--install] [--force-install]
+  bolt make <target> [--install] [--force-install] [--key=<key.pem>] [--cert=<cert.pem>]
       Build a bolt package using <target>.bolt.json
-      --install       Also installs the package into the Local Package Store
-      --force-install Installs the package, overwriting any existing package with the same name
+      --install           Also installs the package into the Local Package Store
+      --force-install     Installs the package, overwriting any existing package with the same name
+      --key=<key.pem>     Sign the package using the given private key (PEM format)
+      --cert=<cert.pem>   Store the given certificate together with the signature (requires --key)
 
   bolt diff <bottom-oci-image.tar> <top-oci-image.tar> <layer.tgz>
       Create a diff layer that transforms the bottom image into the top image
@@ -39,8 +41,10 @@ Usage:
   bolt extract <oci-image.tar> <layer.tgz>
       Extract the top filesystem layer from an OCI image
 
-  bolt pack <config.json> <layer.tgz>
+  bolt pack <config.json> <layer.tgz> [--key=<key.pem>] [--cert=<cert.pem>]
       Combine a package config and a rootfs layer into a bolt package
+      --key=<key.pem>     Sign the package using the given private key (PEM format)
+      --cert=<cert.pem>   Store the given certificate together with the signature (requires --key)
 
   bolt push <remote> <package-name>
       Copy a bolt package to a remote device via SSH
@@ -77,7 +81,7 @@ Where:
 const commands = {
   diff: { args: 3, handler: diff },
   extract: { args: 2, handler: extract },
-  pack: { args: 2, handler: pack },
+  pack: { args: 2, handler: pack, options: packOptions },
   push: { args: 2, handler: push },
   run: { args: 2, handler: run, options: runOptions },
   make: { args: 1, handler: make, options: makeOptions },

@@ -28,10 +28,12 @@ Run `bolt` with one of the commands described below:
 
 ```
 Usage:
-  bolt make <target> [--install] [--force-install]
+  bolt make <target> [--install] [--force-install] [--key=<key.pem>] [--cert=<cert.pem>]
       Build a bolt package using <target>.bolt.json
-      --install       Also installs the package into the Local Package Store
-      --force-install Installs the package, overwriting any existing package with the same name
+      --install           Also installs the package into the Local Package Store
+      --force-install     Installs the package, overwriting any existing package with the same name
+      --key=<key.pem>     Sign the package using the given private key (PEM format)
+      --cert=<cert.pem>   Store the given certificate together with the signature (requires --key)
 
   bolt diff <bottom-oci-image.tar> <top-oci-image.tar> <layer.tgz>
       Create a diff layer that transforms the bottom image into the top image
@@ -39,8 +41,10 @@ Usage:
   bolt extract <oci-image.tar> <layer.tgz>
       Extract the top filesystem layer from an OCI image
 
-  bolt pack <config.json> <layer.tgz>
+  bolt pack <config.json> <layer.tgz> [--key=<key.pem>] [--cert=<cert.pem>]
       Combine a package config and a rootfs layer into a bolt package
+      --key=<key.pem>     Sign the package using the given private key (PEM format)
+      --cert=<cert.pem>   Store the given certificate together with the signature (requires --key)
 
   bolt push <remote> <package-name>
       Copy a bolt package to a remote device via SSH
@@ -72,6 +76,21 @@ Where:
 ```
 
 A detailed description of the `bolt make` command can be found in the [docs/make.md](docs/make.md) file.
+
+## Package Signing
+
+Both `bolt pack` and `bolt make` support optional package signing. When `--key=<key.pem>` is provided,
+a [cosign-compatible](https://github.com/rdkcentral/oci-package-spec/blob/main/format.md#signature-manifest)
+signature manifest is embedded in the bolt package alongside the regular package manifest.
+
+Optionally, `--cert=<cert.pem>` embeds the matching X.509 certificate in the signature layer.
+The certificate must correspond to the provided private key — a mismatch causes the command to abort.
+
+Example:
+```
+$ bolt pack com.rdkcentral.myapp.json myapp.tgz --key=signing.key.pem --cert=signing.cert.pem
+Prepared com.rdkcentral.myapp+0.0.1.bolt package from com.rdkcentral.myapp.json and myapp.tgz
+```
 
 ## Example
 
