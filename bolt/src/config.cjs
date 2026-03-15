@@ -36,3 +36,4 @@ exports.DEFAULT_UID = 34567;
 exports.DEFAULT_GID = 34567;
 exports.PROCESS_HOME_DIR = "/home";
 exports.PACKAGE_MANAGER_CALLSIGN = "org.rdk.PackageManagerRDKEMS";
+exports.APP_MANAGER_CALLSIGN = "org.rdk.AppManager";

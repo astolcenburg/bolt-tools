@@ -53,8 +53,15 @@ Usage:
       Copy a bolt package to a remote device via SSH and optionally install it via middleware
       --direct            Skip middleware installation and deploy directly to the bolt packages directory
 
-  bolt run <remote> <package-name> [option]
-      Execute a bolt package on a remote device
+  bolt run <remote> <package-name|package-id|package.bolt> [options]
+      Execute a bolt package on a remote device.
+      If a package ID is provided (without version), the package is always launched via middleware.
+      If a package name is provided, middleware installation is auto-detected; if found, the package
+      is launched via middleware, otherwise it is run directly using crun.
+      Use --direct to skip middleware detection and always run directly.
+      If a .bolt file is provided, it is pushed to the device first and then run.
+      --direct               Skip middleware detection and run the package directly using crun
+      The following options apply to direct mode only:
       --develop              Run with elevated privileges to simplify debugging
       --clear-storage        Clear persistent storage before running the package
       --rw-overlay=<true/false>
@@ -128,7 +135,8 @@ for (const key in globalOptions) {
 let options;
 if (command && command.args === params.args.length - 1 &&
   ((options = checkOptions(params.options, command.options ?? {})))) {
-  Promise.resolve(command.handler(...params.args.slice(1), options)).catch(e => {
+  options.rawOptions = params.options;
+  new Promise(resolve => resolve(command.handler(...params.args.slice(1), options))).catch(e => {
     printError(e);
     process.exit(1);
   });
