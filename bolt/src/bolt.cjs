@@ -19,6 +19,7 @@
 
 const params = require('./params.cjs');
 const { loadGlobalConfig } = require('./globalConfig.cjs');
+const { globalOptions } = require('./globalOptions.cjs');
 const { diff } = require('./diff.cjs');
 const { extract } = require('./extract.cjs');
 const { pack, packOptions } = require('./pack.cjs');
@@ -74,6 +75,9 @@ Where:
   remote        Hostname or alias of a device accessible via SSH in non-interactive mode
 
   package-name  Name of a bolt package generated using the pack command
+
+Global options (can be used with any command):
+  --verbose     Print detailed output during execution
 `);
 
   process.exit(-1);
@@ -104,6 +108,15 @@ const globalConfig = loadGlobalConfig();
 for (const key in globalConfig) {
   if (params.options[key] === undefined && command?.options?.[key]) {
     params.options[key] = globalConfig[key];
+  }
+}
+
+for (const key in globalOptions) {
+  if (key in params.options) {
+    if (!globalOptions[key](params)) {
+      help();
+    }
+    delete params.options[key];
   }
 }
 

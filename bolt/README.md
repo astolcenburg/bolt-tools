@@ -73,6 +73,9 @@ Where:
   remote        Hostname or alias of a device accessible via SSH in non-interactive mode
 
   package-name  Name of a bolt package generated using the pack command
+
+Global options (can be used with any command):
+  --verbose     Print detailed output during execution
 ```
 
 A detailed description of the `bolt make` command can be found in the [docs/make.md](docs/make.md) file.

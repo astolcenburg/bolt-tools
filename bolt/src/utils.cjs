@@ -20,10 +20,10 @@
 const { renameSync, copyFileSync, linkSync, unlinkSync, mkdtempSync } = require('node:fs');
 const { join, isAbsolute, resolve } = require('node:path');
 const { execSync } = require('node:child_process');
-const { verbose } = require('./config.cjs');
+const config = require('./config.cjs');
 
 function execNoOutput(command, params) {
-  if (verbose) console.log(command);
+  if (config.verbose) console.log(command);
 
   try {
     const stdout = execSync(
@@ -38,13 +38,13 @@ function execNoOutput(command, params) {
   } catch (err) {
 
     if (err.code) {
-      if (verbose) console.error(err.code);
+      if (config.verbose) console.error(err.code);
     } else {
       const { stdout, stderr } = err;
-      if (verbose) console.error({ stdout, stderr });
+      if (config.verbose) console.error({ stdout, stderr });
     }
 
-    if (verbose) console.error(err.stack);
+    if (config.verbose) console.error(err.stack);
 
     throw err;
   }
@@ -52,7 +52,7 @@ function execNoOutput(command, params) {
 
 function exec(command, params) {
   const output = execNoOutput(command, params);
-  if (verbose && output) console.log(output.trim());
+  if (config.verbose && output) console.log(output.trim());
   return output;
 }
 
@@ -91,7 +91,7 @@ function linkOrCopySync(from, to, overwrite) {
 }
 
 function printError(e) {
-  if (!verbose) {
+  if (!config.verbose) {
     console.error(`${e}`);
   } else {
     console.error(`${e.stack}`);
