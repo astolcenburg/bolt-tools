@@ -171,7 +171,9 @@ async function makeCommand(packageAlias, workDir, options) {
     packageConfigBuilder
       .updateVersionNameIfNotSpecified(packageConfigStore.getPath())
       .store(packageConfigPath);
-    await pack(packageConfigPath, contentFile);
+
+    pack(packageConfigPath, contentFile, options);
+
     if (options.install) {
       const packageFileName = Package.makeFileName(packageConfig.getFullName());
       try {
@@ -193,6 +195,24 @@ async function makeCommand(packageAlias, workDir, options) {
 exports.make = make;
 
 exports.makeOptions = {
+  key(params, result) {
+    if (params.options.key !== "") {
+      result.key = params.options.key;
+    }
+    return !!result.key;
+  },
+
+  cert(params, result) {
+    if (params.options.cert !== "") {
+      if (!params.options.key) {
+        console.error('Error: --cert requires --key');
+        return false;
+      }
+      result.cert = params.options.cert;
+    }
+    return !!result.cert;
+  },
+
   install(params, result) {
     if (params.options.install === "") {
       Object.assign(result, {

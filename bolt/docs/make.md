@@ -8,7 +8,7 @@ by using instructions defined in `bolt.json` configuration files.
 ## Usage
 
 ```
-bolt make <target> [--install] [--force-install]
+bolt make <target> [--install] [--force-install] [--key=<key.pem>] [--cert=<cert.pem>]
 ```
 
 - `<target>` corresponds to a file named `<target>.bolt.json`. Example: `bolt make myapp` looks for `myapp.bolt.json`.
@@ -20,11 +20,13 @@ bolt make <target> [--install] [--force-install]
 
 ## Options
 
-| Option          | Description                                                                          |
-|-----------------|--------------------------------------------------------------------------------------|
-| (none)          | Builds the package but does not install it.                                          |
-| --install       | Installs the generated package into the [local package store](#local-package-store). |
-| --force-install | Same as `--install`, but overwrites any existing package with the same name.         |
+| Option                  | Description                                                                          |
+|-------------------------|--------------------------------------------------------------------------------------|
+| (none)                  | Builds the package but does not install it.                                          |
+| --install               | Installs the generated package into the [local package store](#local-package-store). |
+| --force-install         | Same as `--install`, but overwrites any existing package with the same name.         |
+| --key=\<key.pem\>       | Signs the package using the specified RSA private key (PEM format). Produces a [cosign-compatible](https://github.com/rdkcentral/oci-package-spec/blob/main/format.md#signature-manifest) signature manifest inside the bolt package. |
+| --cert=\<cert.pem\>     | Stores the given certificate together with the signature. The certificate must match the private key. Requires `--key`. |
 
 These options simplify sharing packages across multiple build environments, which is necessary for [dependency handling](#dependency-handling).
 
@@ -121,4 +123,12 @@ bolt make myapp --install
 - Force install (overwrite existing):
 ```
 bolt make myapp --force-install
+```
+- Build and sign the package with a private key:
+```
+bolt make myapp --key=signing.key.pem
+```
+- Build, sign, and embed a certificate:
+```
+bolt make myapp --key=signing.key.pem --cert=signing.cert.pem
 ```

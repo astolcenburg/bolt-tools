@@ -17,10 +17,11 @@
  * limitations under the License.
 */
 
-const { digestFile } = require('./digest.cjs');
 const { makeArtifactManifest } = require('./artifact-manifest.cjs');
+const sha256 = require('./tools/sha256.cjs');
+const { ZIPPackageBuilder } = require('./ZIPPackageBuilder.cjs');
 const { exec } = require('./utils.cjs');
-const { statSync, mkdirSync, renameSync, writeFileSync, rmSync, readFileSync } = require('node:fs');
+const { statSync, mkdirSync, rmSync, readFileSync } = require('node:fs');
 
 function validateConfig(config) {
   if ((config.packageType === "base" || config.packageType === "runtime" || config.packageType === "application") &&
@@ -34,7 +35,7 @@ function validateConfig(config) {
   }
 }
 
-async function pack(configFile, content) {
+function pack(configFile, content, options) {
   statSync(configFile);
   statSync(content);
   const config = JSON.parse(readFileSync(configFile));
@@ -42,30 +43,24 @@ async function pack(configFile, content) {
   const output = `${config.id}+${config.version}`;
 
   if (exec(`which ralfpack >/dev/null; echo $?`).trim() === "0") {
-    exec(`ralfpack create --config ${configFile} --content ${content} --image-format erofs.lz4 ${output}.bolt`);
+    let extraParams = options.key ? ` --key "${options.key}"` : "";
+    extraParams += options.cert ? ` --certificate "${options.cert}"` : "";
+    exec(`ralfpack create --config "${configFile}" --content "${content}" ${extraParams} --image-format erofs.lz4 "${output}.bolt"`);
   } else {
-    await packInternal(content, config, output);
+    rmSync(output, { recursive: true, force: true });
+    mkdirSync(output, { recursive: true });
+    try {
+      packInternal(content, config, output, options);
+    } finally {
+      rmSync(output, { recursive: true, force: true });
+    }
   }
 
   console.log(`Prepared ${output}.bolt package from ${configFile} and ${content}`);
 }
 
-async function importFile(output, inputFile) {
-  const inputFileDigest = await digestFile(inputFile);
-  const inputFileSize = statSync(inputFile).size;
-  renameSync(inputFile, output + '/blobs/sha256/' + inputFileDigest);
-
-  return {
-    digest: 'sha256:' + inputFileDigest,
-    size: inputFileSize
-  };
-}
-
-async function packInternal(content, config, output) {
-  rmSync(output, { recursive: true, force: true });
-  rmSync(output + ".bolt", { recursive: true, force: true });
-
-  mkdirSync(output + '/blobs/sha256', { recursive: true });
+function packInternal(content, config, output, options) {
+  const builder = new ZIPPackageBuilder(output + ".bolt", output);
 
   const erofsTmpFile = output + '/erofs';
   exec(`mkfs.erofs -zlz4 --all-root --tar --gzip ${erofsTmpFile} ${content}`);
@@ -87,10 +82,8 @@ async function packInternal(content, config, output) {
     process.exit(-1);
   }
 
-  const contentInfo = await importFile(output, erofsTmpFile);
-
-  writeFileSync(output + '/config.json', JSON.stringify(config, null, 2));
-  const configInfo = await importFile(output, output + '/config.json');
+  const contentInfo = builder.importFile(erofsTmpFile);
+  const configInfo = builder.importObject(config);
 
   const manifest = makeArtifactManifest({
     type: config.packageType,
@@ -109,8 +102,7 @@ async function packInternal(content, config, output) {
     }
   });
 
-  writeFileSync(output + '/manifest.json', JSON.stringify(manifest, null, 2));
-  const manifestInfo = await importFile(output, output + '/manifest.json');
+  const manifestInfo = builder.importObject(manifest);
 
   const index = {
     "schemaVersion": 2,
@@ -127,9 +119,100 @@ async function packInternal(content, config, output) {
     ]
   };
 
-  writeFileSync(output + '/index.json', JSON.stringify(index, null, 2));
-  writeFileSync(output + '/oci-layout', '{"imageLayoutVersion": "1.0.0"}');
-  exec(`zip -r -0 '../${output}.bolt' .`, { cwd: output });
+  if (options.key) {
+    // https://github.com/rdkcentral/oci-package-spec/blob/main/format.md#signature-layer-payload
+    const signatureLayerPayload = {
+      "critical": {
+        "identity": {
+          "docker-reference": config.id,
+        },
+        "image": {
+          "docker-manifest-digest": `${manifestInfo.digest}`,
+        },
+        "type": "cosign container image signature",
+      },
+      "optional": null
+    };
+    const signatureLayerPayloadStr = JSON.stringify(signatureLayerPayload, null, 2);
+    const signatureLayerPayloadBuf = Buffer.from(signatureLayerPayloadStr);
+    const signatureContentInfo = builder.importString(signatureLayerPayloadStr);
+    const signature = sha256.sign(signatureLayerPayloadBuf, options.key);
+
+    const signatureConfig = {
+      "architecture": "",
+      "os": "",
+      "rootfs": {
+        "type": "layers",
+        "diff_ids": [
+          signatureContentInfo.digest
+        ]
+      }
+    };
+    const signatureConfigInfo = builder.importObject(signatureConfig);
+
+    // https://github.com/rdkcentral/oci-package-spec/blob/main/format.md#signature-manifest
+    const signatureManifest = {
+      "schemaVersion": 2,
+      "mediaType": "application/vnd.oci.image.manifest.v1+json",
+      "config": {
+        "mediaType": "application/vnd.oci.image.config.v1+json",
+        "digest": signatureConfigInfo.digest,
+        "size": signatureConfigInfo.size,
+      },
+      "layers": [
+        {
+          "mediaType": "application/vnd.dev.cosign.simplesigning.v1+json",
+          "digest": signatureContentInfo.digest,
+          "size": signatureContentInfo.size,
+          "annotations": {
+            "dev.cosignproject.cosign/signature": signature,
+          }
+        }
+      ]
+    };
+
+    if (options.cert) {
+      if (!sha256.verify(signatureLayerPayloadBuf, options.cert, signature)) {
+        throw new Error(`Certificate ${options.cert} does not match key ${options.key}!`);
+      }
+      signatureManifest.layers[0].annotations["dev.sigstore.cosign/certificate"] = readFileSync(options.cert, 'utf-8');
+    }
+
+    const signatureManifestInfo = builder.importObject(signatureManifest);
+
+    // https://github.com/rdkcentral/oci-package-spec/blob/main/format.md#index-indexjson
+    index.manifests.push({
+      "mediaType": "application/vnd.oci.image.manifest.v1+json",
+      "digest": signatureManifestInfo.digest,
+      "size": signatureManifestInfo.size,
+      "annotations": {
+        "org.opencontainers.image.ref.name": `${manifestInfo.digest.replace(':', '-')}.sig`
+      }
+    });
+  }
+  builder.addString('index.json', JSON.stringify(index, null, 2));
+  builder.addString('oci-layout', '{"imageLayoutVersion": "1.0.0"}');
+  builder.close();
 }
 
 exports.pack = pack;
+
+exports.packOptions = {
+  key(params, result) {
+    if (params.options.key !== "") {
+      result.key = params.options.key;
+    }
+    return !!result.key;
+  },
+
+  cert(params, result) {
+    if (params.options.cert !== "") {
+      if (!params.options.key) {
+        console.error('Error: --cert requires --key');
+        return false;
+      }
+      result.cert = params.options.cert;
+    }
+    return !!result.cert;
+  },
+}

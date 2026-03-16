@@ -18,6 +18,7 @@
 */
 
 exports.verbose = false;
+exports.READ_CHUNK_SIZE = 64 * 1024;
 exports.REMOTE_PACKAGES_DIR = "/data/bolt/packages";
 exports.REMOTE_MOUNTS_DIR = "/data/bolt/mounts";
 exports.REMOTE_BUNDLES_DIR = "/data/bolt/bundles";
