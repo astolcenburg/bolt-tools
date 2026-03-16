@@ -28,6 +28,9 @@ bolt make <target> [--install] [--force-install] [--key=<key.pem>] [--cert=<cert
 | --key=\<key.pem\>       | Signs the package using the specified RSA private key (PEM format). Produces a [cosign-compatible](https://github.com/rdkcentral/oci-package-spec/blob/main/format.md#signature-manifest) signature manifest inside the bolt package. |
 | --cert=\<cert.pem\>     | Stores the given certificate together with the signature. The certificate must match the private key. Requires `--key`. |
 
+The `--key` and `--cert` options can also be set globally in `~/.bolt/config.json` so they don't need
+to be specified on every invocation. See the [Global Configuration](../README.md#global-configuration) section in the README.
+
 These options simplify sharing packages across multiple build environments, which is necessary for [dependency handling](#dependency-handling).
 
 ## Format of bolt.json Files

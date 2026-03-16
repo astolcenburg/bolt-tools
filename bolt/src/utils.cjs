@@ -18,7 +18,7 @@
 */
 
 const { renameSync, copyFileSync, linkSync, unlinkSync, mkdtempSync } = require('node:fs');
-const { join } = require('node:path');
+const { join, isAbsolute, resolve } = require('node:path');
 const { execSync } = require('node:child_process');
 const { verbose } = require('./config.cjs');
 
@@ -102,9 +102,14 @@ function makeWorkDir() {
   return mkdtempSync(join(process.cwd(), 'tmp-'));
 }
 
+function resolvePath(resolveDir, path) {
+  return isAbsolute(path) ? path : resolve(resolveDir, path);
+}
+
 exports.exec = exec;
 exports.execNoOutput = execNoOutput;
 exports.moveSync = moveSync;
 exports.linkOrCopySync = linkOrCopySync;
 exports.printError = printError;
 exports.makeWorkDir = makeWorkDir;
+exports.resolvePath = resolvePath;

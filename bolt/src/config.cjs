@@ -17,7 +17,11 @@
  * limitations under the License.
 */
 
+const { homedir } = require('node:os');
+const { join } = require('node:path');
+
 exports.verbose = false;
+exports.GLOBAL_CONFIG_PATH = join(homedir(), '.bolt', 'config.json');
 exports.READ_CHUNK_SIZE = 64 * 1024;
 exports.REMOTE_PACKAGES_DIR = "/data/bolt/packages";
 exports.REMOTE_MOUNTS_DIR = "/data/bolt/mounts";

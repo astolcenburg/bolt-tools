@@ -92,6 +92,39 @@ $ bolt pack com.rdkcentral.myapp.json myapp.tgz --key=signing.key.pem --cert=sig
 Prepared com.rdkcentral.myapp+0.0.1.bolt package from com.rdkcentral.myapp.json and myapp.tgz
 ```
 
+## Global Configuration
+
+Bolt reads a global configuration file from `~/.bolt/config.json`. This allows you to set default
+values for options so you don't need to specify them on every invocation. Options provided on the
+command line always take precedence over the global configuration.
+
+Supported options:
+
+| Option | Description                                      |
+|--------|--------------------------------------------------|
+| `key`  | Default path to the RSA private key (PEM format) |
+| `cert` | Default path to the X.509 certificate (PEM format) |
+
+Example `~/.bolt/config.json`:
+```json
+{
+  "key": "/home/user/.bolt/signing.key.pem",
+  "cert": "/home/user/.bolt/signing.cert.pem"
+}
+```
+
+Relative paths are resolved relative to the directory containing the config file (`~/.bolt/`),
+so the example above can be simplified to:
+```json
+{
+  "key": "signing.key.pem",
+  "cert": "signing.cert.pem"
+}
+```
+
+With this configuration in place, `bolt make` and `bolt pack` will sign packages automatically
+without requiring `--key` and `--cert` on every invocation.
+
 ## Example
 
 ```

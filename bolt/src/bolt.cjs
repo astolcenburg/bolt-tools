@@ -18,6 +18,7 @@
 */
 
 const params = require('./params.cjs');
+const { loadGlobalConfig } = require('./globalConfig.cjs');
 const { diff } = require('./diff.cjs');
 const { extract } = require('./extract.cjs');
 const { pack, packOptions } = require('./pack.cjs');
@@ -98,6 +99,14 @@ function checkOptions(provided, allowed) {
 }
 
 const command = commands[params.args[0]];
+
+const globalConfig = loadGlobalConfig();
+for (const key in globalConfig) {
+  if (params.options[key] === undefined && command?.options?.[key]) {
+    params.options[key] = globalConfig[key];
+  }
+}
+
 let options;
 if (command && command.args === params.args.length - 1 &&
   ((options = checkOptions(params.options, command.options ?? {})))) {
