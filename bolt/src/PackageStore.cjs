@@ -25,16 +25,15 @@ const PACKAGE_STORE_DIR = 'bolts';
 const MAX_DEPTH = 100;
 
 class PackageStore {
-  constructor(initDir, workDir) {
-    this.path = "";
-    this.workDir = workDir;
+  static find(workDir) {
+    let base = process.env.BUILDDIR ?? process.cwd();
+    let foundPath;
 
-    let base = initDir;
     for (let i = 0; i < MAX_DEPTH; ++i) {
       const path = resolve(base + '/' + PACKAGE_STORE_DIR);
 
       if (statSync(path, { throwIfNoEntry: false })?.isDirectory()) {
-        this.path = path;
+        foundPath = path;
         break;
       } else if (path !== '/' + PACKAGE_STORE_DIR) {
         base += '/..';
@@ -42,10 +41,25 @@ class PackageStore {
         break;
       }
     }
+
+    if (foundPath) {
+      return new PackageStore(foundPath, workDir);
+    }
+
+    return null;
+  }
+
+  constructor(path, workDir) {
+    this.path = path;
+    this.workDir = workDir;
+  }
+
+  generatePackagePath(packageFullName) {
+    return `${this.path}/${Package.makeFileName(packageFullName)}`;
   }
 
   getPackage(packageFullName) {
-    return Package.fromPath(`${this.path}/${packageFullName}.bolt`, packageFullName, this.workDir);
+    return Package.fromPathAndFullName(this.generatePackagePath(packageFullName), packageFullName, this.workDir);
   }
 
   getPath() {

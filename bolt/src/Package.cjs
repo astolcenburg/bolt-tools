@@ -20,11 +20,20 @@
 const { statSync, readFileSync, existsSync } = require('node:fs');
 const { exec } = require('./utils.cjs');
 const { PackageConfig } = require('./PackageConfig.cjs');
+const path = require('node:path');
 
 const PACKAGE_FILE_EXTENSION = ".bolt";
 
 class Package {
-  static fromPath(path, fullName, workDir) {
+  static fromPath(path, workDir) {
+    if (Package.validatePackageByPath(path)) {
+      return new Package(path, this.pathToFullName(path), workDir);
+    } else {
+      return null;
+    }
+  }
+
+  static fromPathAndFullName(path, fullName, workDir) {
     if (Package.validatePackageByPath(path)) {
       return new Package(path, fullName, workDir);
     } else {
@@ -36,8 +45,26 @@ class Package {
     return fullName + PACKAGE_FILE_EXTENSION;
   }
 
+  static isPackageFileName(fileName) {
+    return fileName.endsWith(PACKAGE_FILE_EXTENSION);
+  }
+
+  static pathToFullName(packagePath) {
+    return path.basename(packagePath, PACKAGE_FILE_EXTENSION);
+  }
+
+  static parsePackageFullName(fullName) {
+    const parsed = fullName.split("+");
+
+    if (parsed.length === 2) {
+      return parsed;
+    }
+
+    return [fullName, ''];
+  }
+
   static validatePackageByPath(path) {
-    return path?.endsWith(PACKAGE_FILE_EXTENSION) && statSync(path, { throwIfNoEntry: false })?.isFile();
+    return statSync(path, { throwIfNoEntry: false })?.isFile();
   }
 
   static getPathFromInfo(ociDir, entry) {
@@ -80,6 +107,17 @@ class Package {
     return Package.getPathFromInfo(ociDir, manifest.config);
   }
 
+  static hasSignature(pkgPath) {
+    const index = JSON.parse(exec(`unzip -p "${pkgPath}" index.json`));
+    for (const manifest of index.manifests ?? []) {
+      const refName = manifest.annotations?.["org.opencontainers.image.ref.name"];
+      if (refName?.endsWith(".sig")) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   static extractLastLayer(ociDir, outDir) {
     const manifest = Package.getManifest(ociDir);
     const layer = manifest.layers.at(-1);
@@ -91,8 +129,8 @@ class Package {
     }
   }
 
-  constructor(path, fullName, workDir) {
-    this.path = path;
+  constructor(packagePath, fullName, workDir) {
+    this.path = path.resolve(packagePath);
     this.fullName = fullName;
     this.workDir = workDir;
     this.ociDir = "";
@@ -102,6 +140,9 @@ class Package {
   getConfig() {
     if (!this.config) {
       this.config = PackageConfig.fromPath(Package.getConfigPath(this.getOCIDir()));
+      if (!this.config) {
+        throw new Error(`Package config is invalid in ${this.getOCIDir()}`);
+      }
     }
     return this.config;
   }

@@ -93,15 +93,7 @@ Missing dependencies cause `bolt make` to fail.
 
 ## Local Package Store
 
-- Directory name: `bolts`
-- Recommended location: your home directory
-- Created manually:
-```
-mkdir ${HOME}/bolts
-```
-- Located by traversing upward from:
-  - The directory defined by [`BUILDDIR`](https://docs.yoctoproject.org/ref-manual/variables.html#term-BUILDDIR), or
-  - The current directory (if `BUILDDIR` is undefined).
+See [local-package-store.md](local-package-store.md).
 
 ## Locating bolt.json Files
 

@@ -17,19 +17,161 @@
  * limitations under the License.
 */
 
-const { REMOTE_PACKAGES_DIR } = require('./config.cjs');
+const config = require('./config.cjs');
+const { Package } = require('./Package.cjs');
+const { PackageStore } = require('./PackageStore.cjs');
 const { Remote } = require('./Remote.cjs');
+const { RemoteMWPackageStore } = require('./RemoteMWPackageStore.cjs');
+const { printError, makeWorkDir } = require('./utils.cjs');
+const path = require('node:path');
+const { rmSync } = require('node:fs');
 
-function push(remoteName, pkg) {
+function push(remoteName, pkg, options) {
+  let workDir = makeWorkDir();
+  try {
+    pushCommand(remoteName, pkg, workDir, options);
+  } finally {
+    rmSync(workDir, { recursive: true, force: true });
+  }
+}
+
+function findPackage(pkgParam, workDir, locations) {
+  let result = Package.fromPath(pkgParam, workDir);
+
+  if (result) return result;
+  locations.push(pkgParam);
+
+  if (path.basename(pkgParam) === pkgParam) {
+    let fileName = pkgParam;
+    if (!Package.isPackageFileName(pkgParam)) {
+      fileName = Package.makeFileName(pkgParam);
+      result = Package.fromPath(fileName, workDir);
+      if (result) return result;
+      locations.push(fileName);
+    }
+
+    const packageStore = PackageStore.find(workDir);
+    if (packageStore) {
+      result = packageStore.getPackage(pkgParam);
+      if (result) return result;
+      locations.push(packageStore.generatePackagePath(pkgParam));
+    }
+  }
+
+  return result;
+}
+
+function pushCommand(remoteName, pkgParam, workDir, options) {
+  const pkgSearchLocations = [];
+  const pkg = findPackage(pkgParam, workDir, pkgSearchLocations);
+
+  if (!pkg) {
+    throw new Error(`Package ${pkgParam} not found, tried:\n${pkgSearchLocations.join('\n')}`);
+  }
+
   const remote = new Remote(remoteName);
+  let fullName = Package.pathToFullName(pkg.getPath());
+  let [id, version] = Package.parsePackageFullName(fullName);
 
-  remote.unmountPkgWithDeps(pkg);
-  remote.mkdir(`${REMOTE_PACKAGES_DIR}`);
-  remote.rmdir(`${REMOTE_PACKAGES_DIR}/${pkg}`);
-  remote.copyFile(`${pkg}.bolt`, REMOTE_PACKAGES_DIR);
-  remote.exec(`cd ${REMOTE_PACKAGES_DIR} && rm -rf ${pkg} && unzip -o ${pkg}.bolt -d ${pkg} && rm -f ${pkg}.bolt`);
+  if (!version) {
+    fullName = pkg.getFullName();
+    [id, version] = Package.parsePackageFullName(fullName);
+  }
 
-  console.log(`Pushed ${pkg}.bolt to ${remoteName}`);
+  if (!id || !version || !fullName) {
+    throw new Error(`Cannot determine package name, id or version from ${pkgParam}`);
+  }
+
+  const remotePath = config.REMOTE_PACKAGES_DIR + "/" + Package.makeFileName(fullName);
+  remote.mkdir(`${config.REMOTE_PACKAGES_DIR}`);
+  remote.copyFile(pkg.getPath(), remotePath);
+
+  if (!options.direct && !Package.hasSignature(pkg.getPath())) {
+    try {
+      const statusResponse = JSON.parse(remote.makeThunderRequest({
+        method: `Controller.status@${config.PACKAGE_MANAGER_CALLSIGN}`,
+      }));
+
+      if (statusResponse.result[0].state === "activated") {
+        console.log(`Package ${fullName} is not signed, skipping middleware installation`);
+      }
+    } catch (err) {
+    }
+    // signal to callers of this function that direct installation mode was used
+    options.direct = true;
+  }
+
+  if (!options.direct) {
+    let packageRejected = false;
+    try {
+      const installResponse = JSON.parse(remote.makeThunderRequest({
+        method: `${config.PACKAGE_MANAGER_CALLSIGN}.install`,
+        params: {
+          packageId: id,
+          version: version,
+          fileLocator: remotePath,
+        }
+      }));
+
+      if (installResponse.result === "NONE") {
+        console.log(`Pushed and installed ${fullName}.bolt on ${remoteName}`);
+        const remoteStore = new RemoteMWPackageStore(remote);
+        if (remoteStore.getPackagePath(id, version)) {
+          remote.rm(remotePath);
+          return fullName;
+        } else {
+          console.log(`Package installed in an unknown location, also deploying directly to allow running in direct mode`);
+        }
+      } else {
+        const statusResponse = JSON.parse(remote.makeThunderRequest({
+          method: `Controller.status@${config.PACKAGE_MANAGER_CALLSIGN}`,
+        }));
+
+        if (statusResponse.result[0].state === "activated") {
+          packageRejected = true;
+          throw new Error(`Failed to install package ${fullName}: ${JSON.stringify(installResponse)}`);
+        } else {
+          // signal to callers of this function that direct installation mode was used
+          options.direct = true;
+        }
+      }
+    } catch (err) {
+      if (packageRejected) {
+        remote.rm(remotePath);
+        console.log(`Middleware installation failed; use --direct to skip middleware and deploy directly`);
+        throw err;
+      }
+      // signal to callers of this function that direct installation mode was used
+      options.direct = true;
+    }
+  }
+
+  try {
+    remote.unmountPkgWithDeps(fullName);
+    remote.rm(`${config.REMOTE_PACKAGES_DIR}/${fullName}`);
+    remote.exec([
+      `cd '${config.REMOTE_PACKAGES_DIR}'`,
+      `rm -rf '${fullName}'`,
+      `unzip -o '${fullName}.bolt' -d '${fullName}'`,
+      `rm -f '${Package.makeFileName(fullName)}'`,
+    ].join(' && '));
+
+    console.log(`Pushed ${fullName}.bolt to ${remoteName}`);
+  } catch (err) {
+    if (options.direct) {
+      throw err;
+    }
+    console.log(`Direct deployment was unsuccessful`);
+    printError(err);
+  }
+
+  return fullName;
 }
 
 exports.push = push;
+
+exports.pushOptions = {
+  direct(params, result) {
+    return (result.direct = (params.options.direct === ""));
+  },
+}

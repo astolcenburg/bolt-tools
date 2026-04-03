@@ -19,7 +19,7 @@
 
 const { statSync, rmSync, readFileSync, mkdirSync } = require('node:fs');
 const { assert } = require('node:console');
-const { exec, printError, makeWorkDir, linkOrCopySync } = require('./utils.cjs');
+const { exec, makeWorkDir, linkOrCopySync } = require('./utils.cjs');
 const { pack } = require('./pack.cjs');
 const { extract } = require('./extract.cjs');
 const { Package } = require('./Package.cjs');
@@ -40,7 +40,7 @@ class PackageProvider {
     if (fullPackageName === this.configStore.getTopPackageFullName()) {
       return this.configStore.getTopConfig();
     }
-    return this.packageStore.getPackage(fullPackageName);
+    return this.packageStore?.getPackage(fullPackageName);
   }
 }
 
@@ -91,8 +91,6 @@ async function make(packageAlias, options) {
   let workDir = makeWorkDir();
   try {
     await makeCommand(packageAlias, workDir, options);
-  } catch (e) {
-    printError(e);
   } finally {
     rmSync(workDir, { recursive: true, force: true });
   }
@@ -108,16 +106,9 @@ async function makeCommand(packageAlias, workDir, options) {
   }
 
   const packageConfigBuilder = new PackageConfigBuilder(packageConfig);
+  const packageStore = PackageStore.find(workDir);
 
-  let packageStore;
-  const constructPackageStore = function () {
-    if (!packageStore) {
-      packageStore = new PackageStore(process.env.BUILDDIR ?? process.cwd(), workDir);
-    }
-    return packageStore;
-  };
-
-  if (options.install && constructPackageStore().getPath() === '') {
+  if (options.install && !packageStore) {
     throw new Error(`Package store not found!`);
   }
 
@@ -128,7 +119,7 @@ async function makeCommand(packageAlias, workDir, options) {
     const packageLayerArchive = `${workDir}/${packageConfig.getFullName()}-layer.tgz`;
     const packages = PackageDependencyResolver.getDependencies(
       packageConfig.getFullName(),
-      new PackageProvider(constructPackageStore(), packageConfigStore)
+      new PackageProvider(packageStore, packageConfigStore)
     );
     const last = packages.pop();
 

@@ -20,10 +20,11 @@
 const params = require('./params.cjs');
 const { loadGlobalConfig } = require('./globalConfig.cjs');
 const { globalOptions } = require('./globalOptions.cjs');
+const { printError } = require('./utils.cjs');
 const { diff } = require('./diff.cjs');
 const { extract } = require('./extract.cjs');
 const { pack, packOptions } = require('./pack.cjs');
-const { push } = require('./push.cjs');
+const { push, pushOptions } = require('./push.cjs');
 const { run, runOptions } = require('./run.cjs');
 const { make, makeOptions } = require('./make.cjs');
 
@@ -48,8 +49,9 @@ Usage:
       --key=<key.pem>     Sign the package using the given private key (PEM format)
       --cert=<cert.pem>   Store the given certificate together with the signature (requires --key)
 
-  bolt push <remote> <package-name>
-      Copy a bolt package to a remote device via SSH
+  bolt push <remote> <package> [--direct]
+      Copy a bolt package to a remote device via SSH and optionally install it via middleware
+      --direct            Skip middleware installation and deploy directly to the bolt packages directory
 
   bolt run <remote> <package-name> [option]
       Execute a bolt package on a remote device
@@ -74,6 +76,9 @@ Where:
 
   remote        Hostname or alias of a device accessible via SSH in non-interactive mode
 
+  package       A bolt package identified by file path, file name, or package name
+                see https://github.com/rdkcentral/bolt-tools/blob/main/bolt/docs/push.md
+
   package-name  Name of a bolt package generated using the pack command
 
 Global options (can be used with any command):
@@ -87,7 +92,7 @@ const commands = {
   diff: { args: 3, handler: diff },
   extract: { args: 2, handler: extract },
   pack: { args: 2, handler: pack, options: packOptions },
-  push: { args: 2, handler: push },
+  push: { args: 2, handler: push, options: pushOptions },
   run: { args: 2, handler: run, options: runOptions },
   make: { args: 1, handler: make, options: makeOptions },
 };
@@ -123,7 +128,10 @@ for (const key in globalOptions) {
 let options;
 if (command && command.args === params.args.length - 1 &&
   ((options = checkOptions(params.options, command.options ?? {})))) {
-  command.handler(...params.args.slice(1), options);
+  Promise.resolve(command.handler(...params.args.slice(1), options)).catch(e => {
+    printError(e);
+    process.exit(1);
+  });
 } else {
   help();
 }

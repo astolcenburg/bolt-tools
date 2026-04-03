@@ -26,6 +26,7 @@ class Remote {
 
   constructor(name) {
     this.name = name;
+    this.thunderRequestId = 100;
   }
 
   exec(command, params) {
@@ -42,41 +43,46 @@ class Remote {
   }
 
   isMounted(dir) {
-    return exec(`ssh ${this.name} "mountpoint ${dir} > /dev/null 2>&1"; echo $?`).trim() === "0";
+    return exec(`ssh ${this.name} "mountpoint '${dir}' > /dev/null 2>&1"; echo $?`).trim() === "0";
   }
 
   mount(from, to) {
-    exec(`ssh ${this.name} mount ${from} ${to}`);
+    exec(`ssh ${this.name} "mount '${from}' '${to}'"`);
   }
 
   unmount(dir) {
-    exec(`ssh ${this.name} umount ${dir}`);
+    exec(`ssh ${this.name} "umount '${dir}'"`);
   }
 
   mountWithDMVerity(pkg, layerInfo, mountDir) {
-    const loop = exec(`ssh ${this.name} /sbin/losetup -f --show ${layerInfo.path}`).trim();
-    exec(`ssh ${this.name} /usr/sbin/veritysetup open ${loop} ${pkg} ${loop} --hash-offset ${layerInfo.offset} ${layerInfo.roothash}`);
-    exec(`ssh ${this.name} mount /dev/mapper/${pkg} ${mountDir}`);
+    const loop = exec(`ssh ${this.name} "/sbin/losetup -f --show '${layerInfo.path}'"`).trim();
+    exec(`ssh ${this.name} "/usr/sbin/veritysetup open '${loop}' '${pkg}' '${loop}' --hash-offset ${layerInfo.offset} ${layerInfo.roothash}"`);
+    exec(`ssh ${this.name} "mount '/dev/mapper/${pkg}' '${mountDir}'"`);
   }
 
   isDMVerityDevice(name) {
-    return exec(`ssh ${this.name} "/usr/sbin/dmsetup status ${name} > /dev/null 2>&1"; echo $?`).trim() === "0";
+    return exec(`ssh ${this.name} "/usr/sbin/dmsetup status '${name}' > /dev/null 2>&1"; echo $?`).trim() === "0";
   }
 
   mkdir(dir) {
-    exec(`ssh ${this.name} mkdir -p ${dir}`);
+    const dirs = Array.isArray(dir) ? dir.map(d => `'${d}'`).join(' ') : `'${dir}'`;
+    exec(`ssh ${this.name} "mkdir -p ${dirs}"`);
+  }
+
+  rm(path) {
+    exec(`ssh ${this.name} "rm -rf '${path}'"`);
   }
 
   rmdir(dir) {
-    exec(`ssh ${this.name} rm -rf ${dir}`);
+    this.rm(dir);
   }
 
   copyFile(localFile, remoteFile) {
     try {
-      exec(`scp ${Remote.useScpLegacy ? '-O ' : ''}${localFile} ${this.name}:${remoteFile}`);
+      exec(`scp ${Remote.useScpLegacy ? '-O ' : ''}'${localFile}' ${this.name}:'${remoteFile}'`);
     } catch (e) {
       if (Remote.useScpLegacy && e.message.includes('unknown option -- O')) {
-        exec(`scp ${localFile} ${this.name}:${remoteFile}`);
+        exec(`scp '${localFile}' ${this.name}:'${remoteFile}'`);
         Remote.useScpLegacy = false;
       } else {
         throw e;
@@ -85,15 +91,15 @@ class Remote {
   }
 
   fileExists(path) {
-    return exec(`ssh ${this.name} "test -f ${path}"; echo $?`).trim() === "0";
+    return exec(`ssh ${this.name} "test -f '${path}'"; echo $?`).trim() === "0";
   }
 
   dirExists(path) {
-    return exec(`ssh ${this.name} "test -d ${path}"; echo $?`).trim() === "0";
+    return exec(`ssh ${this.name} "test -d '${path}'"; echo $?`).trim() === "0";
   }
 
   socketExists(path) {
-    return exec(`ssh ${this.name} "test -S ${path}"; echo $?`).trim() === "0";
+    return exec(`ssh ${this.name} "test -S '${path}'"; echo $?`).trim() === "0";
   }
 
   storeObject(path, object) {
@@ -114,7 +120,7 @@ class Remote {
   }
 
   getTextFile(path) {
-    return exec(`ssh ${this.name} cat ${path}`);
+    return exec(`ssh ${this.name} "cat '${path}'"`);
   }
 
   getPkgDir(pkg) {
@@ -136,7 +142,7 @@ class Remote {
   unmountPkg(pkg) {
     this.unmount(this.getPkgMountDir(pkg));
     if (this.isDMVerityDevice(pkg)) {
-      exec(`ssh ${this.name} /usr/sbin/dmsetup remove ${pkg}`);
+      exec(`ssh ${this.name} "/usr/sbin/dmsetup remove '${pkg}'"`);
       exec(`ssh ${this.name} /sbin/losetup -D`);
     }
   }
@@ -153,7 +159,11 @@ class Remote {
   }
 
   makeThunderRequest(request) {
-    exec(`ssh ${this.name} curl http://127.0.0.1:9998/jsonrpc -d '${JSON.stringify(JSON.stringify(request))}'`);
+    request.jsonrpc = "2.0";
+    if (!request.id) {
+      request.id = ++this.thunderRequestId;
+    }
+    return exec(`ssh ${this.name} curl http://127.0.0.1:9998/jsonrpc -d '${JSON.stringify(JSON.stringify(request))}'`);
   }
 }
 

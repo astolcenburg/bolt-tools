@@ -202,7 +202,7 @@ function prepareBundle(remote, pkg, bundleConfig, layers, options) {
     });
   }
 
-  remote.mkdir(`${bundleRootfsDir} ${rwDirs}`);
+  remote.mkdir([bundleRootfsDir, ...rwDirs.split(' ')]);
   remote.exec(`chown ${bundleConfig.process.user.uid}:${bundleConfig.process.user.gid} ${rwDirs}`);
   remote.exec(`chmod 700 ${rwDirs}`);
 

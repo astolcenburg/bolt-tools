@@ -46,8 +46,9 @@ Usage:
       --key=<key.pem>     Sign the package using the given private key (PEM format)
       --cert=<cert.pem>   Store the given certificate together with the signature (requires --key)
 
-  bolt push <remote> <package-name>
-      Copy a bolt package to a remote device via SSH
+  bolt push <remote> <package> [--direct]
+      Copy a bolt package to a remote device via SSH and optionally install it via middleware
+      --direct            Skip middleware installation and deploy directly to the bolt packages directory
 
   bolt run <remote> <package-name> [option]
       Execute a bolt package on a remote device
@@ -72,6 +73,9 @@ Where:
 
   remote        Hostname or alias of a device accessible via SSH in non-interactive mode
 
+  package       A bolt package identified by file path, file name, or package name
+                see https://github.com/rdkcentral/bolt-tools/blob/main/bolt/docs/push.md
+
   package-name  Name of a bolt package generated using the pack command
 
 Global options (can be used with any command):
@@ -79,6 +83,8 @@ Global options (can be used with any command):
 ```
 
 A detailed description of the `bolt make` command can be found in the [docs/make.md](docs/make.md) file.
+A detailed description of the `bolt push` command can be found in the [docs/push.md](docs/push.md) file.
+A description of the local package store can be found in the [docs/local-package-store.md](docs/local-package-store.md) file.
 
 ## Package Signing
 
