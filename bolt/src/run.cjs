@@ -21,6 +21,22 @@ const { Remote } = require('./Remote.cjs');
 const runtime = require('./runtime-config.cjs');
 const { makeTemplate, applyGPUConfig } = require('./runtime-config.cjs');
 const config = require('./config.cjs');
+const { Package } = require('./Package.cjs');
+const { RemoteMWPackageStore } = require('./RemoteMWPackageStore.cjs');
+const { RemotePackageManager } = require('./RemotePackageManager.cjs');
+const { RemoteAppManager } = require('./RemoteAppManager.cjs');
+const { pushCommand } = require('./push.cjs');
+const { makeWorkDir } = require('./utils.cjs');
+const { rmSync } = require('node:fs');
+
+const directOnlyRunOptions = {
+  develop: true,
+  uid: true,
+  gid: true,
+  userns: true,
+  'clear-storage': true,
+  'rw-overlay': true,
+};
 
 function getPath(packageDir, entry) {
   const [algo, digest] = entry.digest.split(":");
@@ -90,7 +106,7 @@ function mountIfNeeded(remote, pkg) {
         if (remote.fileExists("/usr/sbin/veritysetup") && remote.fileExists("/usr/sbin/dmsetup")) {
           remote.mountWithDMVerity(pkg, layerInfo, mountDir);
         } else {
-          console.warn('\n\n\x1b[31mFile /usr/sbin/veritysetup and/or /usr/sbin/dmsetup not found! Cannot enable dm-verity!\x1b[0m\n\n');
+          console.warn('\x1b[33mWarning: /usr/sbin/veritysetup and/or /usr/sbin/dmsetup not found! Cannot enable dm-verity!\x1b[0m');
           remote.mount(layerInfo.path, mountDir);
         }
       } else {
@@ -128,7 +144,6 @@ function prepareDisplay(remote, pkg) {
   let setFocusMethod = "org.rdk.RDKShell.1.setFocus";
 
   if (remote.fileExists(config.AI2_MANAGERS_ENABLED_FILE)) {
-    console.log(`Running ${pkg} using new AppManagers environment`);
     createDisplayMethod = "org.rdk.RDKWindowManager.createDisplay";
     createDisplayParams = {
       displayParams: JSON.stringify(
@@ -142,23 +157,28 @@ function prepareDisplay(remote, pkg) {
   }
 
   const createDisplay = {
-    jsonrpc: "2.0",
-    id: 4,
     method: createDisplayMethod,
     params: createDisplayParams
   };
-  remote.makeThunderRequest(createDisplay);
+
+  try {
+    remote.makeThunderRequest(createDisplay);
+  } catch (err) {
+    console.log(`${createDisplayMethod} failed ${err}`);
+  }
 
   const setFocus = {
-    jsonrpc: "2.0",
-    id: 5,
     method: setFocusMethod,
     params: {
       client: pkg
     }
   };
-  remote.makeThunderRequest(setFocus);
 
+  try {
+    remote.makeThunderRequest(setFocus);
+  } catch (err) {
+    console.log(`${setFocusMethod} failed ${err}`);
+  }
 }
 
 function setupResources(remote, pkg) {
@@ -228,33 +248,28 @@ function getConfigs(remote, pkg) {
   const pkgs = new Map();
 
   function gatherConfigs(name) {
-    try {
-      const config = getConfig(remote, name);
-      const pkgName = makePkgName(config.id, config.version);
+    const config = getConfig(remote, name);
+    const pkgName = makePkgName(config.id, config.version);
 
-      if (name === pkgName) {
-        const foundPkgVersion = pkgs.get(config.id);
+    if (name === pkgName) {
+      const foundPkgVersion = pkgs.get(config.id);
 
-        if (foundPkgVersion === undefined) {
-          pkgs.set(config.id, config.version);
+      if (foundPkgVersion === undefined) {
+        pkgs.set(config.id, config.version);
 
-          for (const dependency in config.dependencies) {
-            const depPkgName = makePkgName(dependency, config.dependencies[dependency]);
-            gatherConfigs(depPkgName);
-          }
-
-          configs.push({ pkg: name, config });
-        } else if (foundPkgVersion === config.version) {
-          console.warn(`Multiple packages depend on the same package ${config.id} ${foundPkgVersion}!`);
-        } else {
-          throw new Error(`Multiple packages depend on different versions of the same package ${config.id} ${foundPkgVersion} vs ${config.version}!`);
+        for (const dependency in config.dependencies) {
+          const depPkgName = makePkgName(dependency, config.dependencies[dependency]);
+          gatherConfigs(depPkgName);
         }
+
+        configs.push({ pkg: name, config });
+      } else if (foundPkgVersion === config.version) {
+        console.warn(`Multiple packages depend on the same package ${config.id} ${foundPkgVersion}!`);
       } else {
-        throw new Error(`Package name does not match package config ${name} vs ${pkgName}`);
+        throw new Error(`Multiple packages depend on different versions of the same package ${config.id} ${foundPkgVersion} vs ${config.version}!`);
       }
-    } catch (e) {
-      console.error(`${e}`);
-      process.exit(-1);
+    } else {
+      throw new Error(`Package name does not match package config ${name} vs ${pkgName}`);
     }
   }
 
@@ -278,9 +293,34 @@ function addDeviceGPULayer(remote, bundleConfig, layerDirs) {
   return result;
 }
 
-function run(remoteName, pkg, options) {
-  const remote = new Remote(remoteName);
+function deployFromRemoteStoreIfNeeded(remote, store, id, version, pkgs) {
+  if (pkgs.has(id)) return;
+  pkgs.add(id);
 
+  if (!remote.dirExists(remote.getPkgDir({ id, version }))) {
+    const storePkgPath = store.getPackagePath(id, version);
+    if (!storePkgPath) {
+      throw new Error(`Package ${id}+${version} not found!`);
+    }
+
+    const pkg = makePkgName(id, version);
+    remote.mkdir(config.REMOTE_PACKAGES_DIR);
+    remote.exec([
+      `cd '${config.REMOTE_PACKAGES_DIR}'`,
+      `rm -rf '${pkg}'`,
+      `unzip -o '${storePkgPath}' -d '${pkg}'`,
+    ].join(' && '));
+
+    console.log(`Deployed ${pkg}.`);
+  }
+
+  const pkgConfig = getConfig(remote, { id, version });
+  for (const depId in pkgConfig.dependencies) {
+    deployFromRemoteStoreIfNeeded(remote, store, depId, pkgConfig.dependencies[depId], pkgs);
+  }
+}
+
+function runDirect(remote, pkg, options) {
   const configs = getConfigs(remote, pkg);
   const layerDirs = [];
 
@@ -296,10 +336,11 @@ function run(remoteName, pkg, options) {
   }
 
   if (!addDeviceGPULayer(remote, bundleConfig, layerDirs)) {
-    console.error(`GPU layer not found!`);
-    console.error(`Please make sure the ${config.REMOTE_GPU_CONFIG} exists and contains valid information.`);
-    console.error(`See https://github.com/rdkcentral/bolt-tools/tree/main/gpu-layer-poc for help.`);
-    process.exit(-1);
+    throw new Error(
+      `GPU layer not found!\n` +
+      `Please make sure the ${config.REMOTE_GPU_CONFIG} exists and contains valid information.\n` +
+      `See https://github.com/rdkcentral/bolt-tools/tree/main/gpu-layer-poc for help.`
+    );
   }
 
   setupResources(remote, pkg);
@@ -310,14 +351,95 @@ function run(remoteName, pkg, options) {
   prepareBundle(remote, pkg, bundleConfig, layerDirs, options);
 
   if (!rialtoAvailable) {
-    console.warn('\n\n\x1b[31mRialto socket not available! Playback not supported!\x1b[0m\n\n');
+    console.warn('\x1b[33mWarning: Rialto socket not available! Playback not supported!\x1b[0m');
   }
 
   if (!waylandAvailable) {
-    console.warn('\n\n\x1b[31mWayland socket not available! Graphics rendering not available!\x1b[0m\n\n');
+    console.warn('\x1b[31mWarning: Wayland socket not available! Graphics rendering not available!\x1b[0m');
   }
 
   start(remote, pkg);
+}
+
+function warnIfDirectOnlyOptions(options) {
+  const active = Object.keys(directOnlyRunOptions)
+    .filter(key => key in (options.rawOptions ?? {}))
+    .map(key => `--${key}`);
+
+  if (active.length > 0) {
+    console.warn(`Warning: the following options are ignored when running via middleware: ${active.join(', ')}`);
+  }
+}
+
+function pushAndRun(remoteName, pkg, options) {
+  const workDir = makeWorkDir();
+  try {
+    return pushCommand(remoteName, pkg, workDir, options);
+  } finally {
+    rmSync(workDir, { recursive: true, force: true });
+  }
+}
+
+function run(remoteName, pkg, options) {
+  const remote = new Remote(remoteName);
+
+  if (Package.fromPath(pkg, null)) {
+    pkg = pushAndRun(remoteName, pkg, options);
+  }
+
+  const [id, version] = Package.parsePackageFullName(pkg);
+
+  if (!version && options.direct) {
+    throw new Error('--direct cannot be used with a package ID (no version). Provide a full package name to run directly.');
+  }
+
+  const store = new RemoteMWPackageStore(remote);
+  const pm = new RemotePackageManager(remote);
+  const appManager = new RemoteAppManager(remote);
+
+  if (!options.direct) {
+    let isInstalled;
+    if (version) {
+      isInstalled = pm.isPackageInstalled(id, version);
+      if (!isInstalled) {
+        if (remote.dirExists(remote.getPkgDir({ id, version })) || store.getPackagePath(id, version)) {
+          console.log(`Package ${pkg} not installed, trying to run directly...`);
+        } else {
+          throw new Error(`Package ${pkg} not installed!`);
+        }
+      }
+    }
+
+    if (!version || isInstalled) {
+      warnIfDirectOnlyOptions(options);
+      let launchFailed = false;
+      try {
+        console.log(`Trying to run ${pkg} via middleware...`);
+        appManager.launch(pkg);
+      } catch (err) {
+        if (appManager.isActive() || !version) {
+          if (version) {
+            console.log(`Middleware launch failed; use --direct to skip middleware and run directly`);
+          }
+          throw err;
+        }
+        launchFailed = true;
+      }
+      if (!launchFailed) {
+        if (appManager.focus(pkg)) {
+          console.log(`Application is running and focused!`);
+        } else {
+          console.warn(`Warning: application is running but could not be focused!`);
+        }
+        return;
+      }
+    }
+  }
+
+  const pkgs = new Set();
+  deployFromRemoteStoreIfNeeded(remote, store, id, version, pkgs);
+
+  runDirect(remote, pkg, options);
 }
 
 exports.run = run;
@@ -407,5 +529,13 @@ exports.runOptions = {
     });
 
     return true;
+  },
+
+  direct(params, result) {
+    if (params.options.direct === "") {
+      result.direct = true;
+      return true;
+    }
+    return false;
   },
 };

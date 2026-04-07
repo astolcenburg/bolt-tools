@@ -50,8 +50,15 @@ Usage:
       Copy a bolt package to a remote device via SSH and optionally install it via middleware
       --direct            Skip middleware installation and deploy directly to the bolt packages directory
 
-  bolt run <remote> <package-name> [option]
-      Execute a bolt package on a remote device
+  bolt run <remote> <package-name|package-id|package.bolt> [options]
+      Execute a bolt package on a remote device.
+      If a package ID is provided (without version), the package is always launched via middleware.
+      If a package name is provided, middleware installation is auto-detected; if found, the package
+      is launched via middleware, otherwise it is run directly using crun.
+      Use --direct to skip middleware detection and always run directly.
+      If a .bolt file is provided, it is pushed to the device first and then run.
+      --direct               Skip middleware detection and run the package directly using crun
+      The following options apply to direct mode only (a warning is printed if used in MW mode):
       --develop              Run with elevated privileges to simplify debugging
       --clear-storage        Clear persistent storage before running the package
       --rw-overlay=<true/false>
@@ -84,6 +91,7 @@ Global options (can be used with any command):
 
 A detailed description of the `bolt make` command can be found in the [docs/make.md](docs/make.md) file.
 A detailed description of the `bolt push` command can be found in the [docs/push.md](docs/push.md) file.
+A detailed description of the `bolt run` command can be found in the [docs/run.md](docs/run.md) file.
 A description of the local package store can be found in the [docs/local-package-store.md](docs/local-package-store.md) file.
 
 ## Package Signing

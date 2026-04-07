@@ -22,6 +22,7 @@ const { Package } = require('./Package.cjs');
 const { PackageStore } = require('./PackageStore.cjs');
 const { Remote } = require('./Remote.cjs');
 const { RemoteMWPackageStore } = require('./RemoteMWPackageStore.cjs');
+const { RemotePackageManager } = require('./RemotePackageManager.cjs');
 const { printError, makeWorkDir } = require('./utils.cjs');
 const path = require('node:path');
 const { rmSync } = require('node:fs');
@@ -70,6 +71,7 @@ function pushCommand(remoteName, pkgParam, workDir, options) {
   }
 
   const remote = new Remote(remoteName);
+  const pm = new RemotePackageManager(remote);
   let fullName = Package.pathToFullName(pkg.getPath());
   let [id, version] = Package.parsePackageFullName(fullName);
 
@@ -87,33 +89,18 @@ function pushCommand(remoteName, pkgParam, workDir, options) {
   remote.copyFile(pkg.getPath(), remotePath);
 
   if (!options.direct && !Package.hasSignature(pkg.getPath())) {
-    try {
-      const statusResponse = JSON.parse(remote.makeThunderRequest({
-        method: `Controller.status@${config.PACKAGE_MANAGER_CALLSIGN}`,
-      }));
-
-      if (statusResponse.result[0].state === "activated") {
-        console.log(`Package ${fullName} is not signed, skipping middleware installation`);
-      }
-    } catch (err) {
+    if (pm.isActive()) {
+      console.log(`Package ${fullName} is not signed, skipping middleware installation`);
     }
     // signal to callers of this function that direct installation mode was used
     options.direct = true;
   }
 
   if (!options.direct) {
-    let packageRejected = false;
     try {
-      const installResponse = JSON.parse(remote.makeThunderRequest({
-        method: `${config.PACKAGE_MANAGER_CALLSIGN}.install`,
-        params: {
-          packageId: id,
-          version: version,
-          fileLocator: remotePath,
-        }
-      }));
+      const installResponse = pm.install(id, version, remotePath);
 
-      if (installResponse.result === "NONE") {
+      if (installResponse === "NONE") {
         console.log(`Pushed and installed ${fullName}.bolt on ${remoteName}`);
         const remoteStore = new RemoteMWPackageStore(remote);
         if (remoteStore.getPackagePath(id, version)) {
@@ -123,20 +110,10 @@ function pushCommand(remoteName, pkgParam, workDir, options) {
           console.log(`Package installed in an unknown location, also deploying directly to allow running in direct mode`);
         }
       } else {
-        const statusResponse = JSON.parse(remote.makeThunderRequest({
-          method: `Controller.status@${config.PACKAGE_MANAGER_CALLSIGN}`,
-        }));
-
-        if (statusResponse.result[0].state === "activated") {
-          packageRejected = true;
-          throw new Error(`Failed to install package ${fullName}: ${JSON.stringify(installResponse)}`);
-        } else {
-          // signal to callers of this function that direct installation mode was used
-          options.direct = true;
-        }
+        throw new Error(`Failed to install package ${fullName}: ${installResponse}`);
       }
     } catch (err) {
-      if (packageRejected) {
+      if (pm.isActive()) {
         remote.rm(remotePath);
         console.log(`Middleware installation failed; use --direct to skip middleware and deploy directly`);
         throw err;
@@ -169,6 +146,7 @@ function pushCommand(remoteName, pkgParam, workDir, options) {
 }
 
 exports.push = push;
+exports.pushCommand = pushCommand;
 
 exports.pushOptions = {
   direct(params, result) {

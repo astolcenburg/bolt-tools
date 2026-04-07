@@ -20,6 +20,7 @@
 const { exec, execNoOutput } = require('./utils.cjs');
 const config = require('./config.cjs');
 const { writeFileSync, rmSync } = require('node:fs');
+const { parseThunderResponse } = require('./ThunderError.cjs');
 
 class Remote {
   static useScpLegacy = true;
@@ -124,6 +125,9 @@ class Remote {
   }
 
   getPkgDir(pkg) {
+    if (typeof pkg === 'object') {
+      pkg = pkg.id + "+" + pkg.version;
+    }
     return config.REMOTE_PACKAGES_DIR + "/" + pkg;
   }
 
@@ -163,7 +167,8 @@ class Remote {
     if (!request.id) {
       request.id = ++this.thunderRequestId;
     }
-    return exec(`ssh ${this.name} curl http://127.0.0.1:9998/jsonrpc -d '${JSON.stringify(JSON.stringify(request))}'`);
+    const responseString = exec(`ssh ${this.name} curl http://127.0.0.1:9998/jsonrpc -d '${JSON.stringify(JSON.stringify(request))}'`);
+    return parseThunderResponse(request.method, responseString);
   }
 }
 
