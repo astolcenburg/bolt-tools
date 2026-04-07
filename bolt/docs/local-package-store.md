@@ -5,6 +5,7 @@ It is used by:
 
 - `bolt make` — to resolve [package dependencies](make.md#dependency-handling) and to install
   built packages when `--install` or `--force-install` is used.
+- `bolt fetch` — to [download packages](fetch.md) from a remote package store server.
 - `bolt push` — to [locate packages by name](push.md#locating-the-package) when no file path is
   provided.
 

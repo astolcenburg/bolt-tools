@@ -27,6 +27,7 @@ const { pack, packOptions } = require('./pack.cjs');
 const { push, pushOptions } = require('./push.cjs');
 const { run, runOptions } = require('./run.cjs');
 const { make, makeOptions } = require('./make.cjs');
+const { fetch, fetchOptions } = require('./fetch.cjs');
 
 function help() {
   console.log(`
@@ -52,6 +53,13 @@ Usage:
   bolt push <remote> <package> [--direct]
       Copy a bolt package to a remote device via SSH and optionally install it via middleware
       --direct            Skip middleware installation and deploy directly to the bolt packages directory
+
+  bolt fetch <package> [--force]
+      Download a bolt package from the configured package store server into the local package store
+      <package> can be a package name (id+version) or file name (id+version.bolt)
+      --force             Replace the package if it already exists in the local package store
+      Package store URL, type and credentials are configured in ~/.bolt/config.json
+      See https://github.com/rdkcentral/bolt-tools/blob/main/bolt/docs/fetch.md
 
   bolt run <remote> <package-name|package-id|package.bolt> [options]
       Execute a bolt package on a remote device.
@@ -102,6 +110,7 @@ const commands = {
   push: { args: 2, handler: push, options: pushOptions },
   run: { args: 2, handler: run, options: runOptions },
   make: { args: 1, handler: make, options: makeOptions },
+  fetch: { args: 1, handler: fetch, options: fetchOptions },
 };
 
 function checkOptions(provided, allowed) {

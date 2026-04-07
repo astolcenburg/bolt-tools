@@ -50,6 +50,13 @@ Usage:
       Copy a bolt package to a remote device via SSH and optionally install it via middleware
       --direct            Skip middleware installation and deploy directly to the bolt packages directory
 
+  bolt fetch <package> [--force]
+      Download a bolt package from the configured package store server into the local package store
+      <package> can be a package name (id+version) or file name (id+version.bolt)
+      --force             Replace the package if it already exists in the local package store
+      Package store URL, type and credentials are configured in ~/.bolt/config.json
+      See https://github.com/rdkcentral/bolt-tools/blob/main/bolt/docs/fetch.md
+
   bolt run <remote> <package-name|package-id|package.bolt> [options]
       Execute a bolt package on a remote device.
       If a package ID is provided (without version), the package is always launched via middleware.
@@ -89,6 +96,7 @@ Global options (can be used with any command):
   --verbose     Print detailed output during execution
 ```
 
+A detailed description of the `bolt fetch` command can be found in the [docs/fetch.md](docs/fetch.md) file.
 A detailed description of the `bolt make` command can be found in the [docs/make.md](docs/make.md) file.
 A detailed description of the `bolt push` command can be found in the [docs/push.md](docs/push.md) file.
 A detailed description of the `bolt run` command can be found in the [docs/run.md](docs/run.md) file.
@@ -121,6 +129,7 @@ Supported options:
 |--------|--------------------------------------------------|
 | `key`  | Default path to the RSA private key (PEM format) |
 | `cert` | Default path to the X.509 certificate (PEM format) |
+| `packageStore*` | Package store settings used by `bolt fetch` (`packageStoreURL`, `packageStoreType`, etc.). See [docs/fetch.md](docs/fetch.md) |
 
 Example `~/.bolt/config.json`:
 ```json
@@ -135,7 +144,8 @@ so the example above can be simplified to:
 ```json
 {
   "key": "signing.key.pem",
-  "cert": "signing.cert.pem"
+  "cert": "signing.cert.pem",
+  "packageStoreURL": "https://packages.example.com/bolts"
 }
 ```
 

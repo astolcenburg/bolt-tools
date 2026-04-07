@@ -24,6 +24,15 @@ const path = require('node:path');
 
 const CONFIG_DIR = path.dirname(GLOBAL_CONFIG_PATH);
 
+function isHTTPURL(value) {
+  try {
+    const { protocol } = new URL(value);
+    return protocol === 'http:' || protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
 function loadGlobalConfig() {
   let parsed;
   try {
@@ -51,6 +60,26 @@ function loadGlobalConfig() {
     }
   } else if (parsed?.cert !== undefined) {
     console.warn(`Warning: invalid 'cert' in ${GLOBAL_CONFIG_PATH}: expected a non-empty string`);
+  }
+
+  if (parsed?.packageStoreURL !== undefined) {
+    if (isHTTPURL(parsed.packageStoreURL)) {
+      result.packageStoreURL = parsed.packageStoreURL;
+    } else {
+      console.warn(`Warning: invalid 'packageStoreURL' in ${GLOBAL_CONFIG_PATH}: expected an HTTP or HTTPS URL`);
+    }
+  }
+
+  if (typeof parsed?.packageStoreType === 'string' && parsed.packageStoreType !== '') {
+    result.packageStoreType = parsed.packageStoreType;
+  } else if (parsed?.packageStoreType !== undefined) {
+    console.warn(`Warning: invalid 'packageStoreType' in ${GLOBAL_CONFIG_PATH}: expected a non-empty string`);
+  }
+
+  if (typeof parsed?.packageStoreUser === 'string' && parsed.packageStoreUser !== '') {
+    result.packageStoreUser = parsed.packageStoreUser;
+  } else if (parsed?.packageStoreUser !== undefined) {
+    console.warn(`Warning: invalid 'packageStoreUser' in ${GLOBAL_CONFIG_PATH}: expected a non-empty string`);
   }
 
   return result;
