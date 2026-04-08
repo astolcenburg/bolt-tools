@@ -21,7 +21,7 @@ const http = require('node:http');
 const https = require('node:https');
 const fs = require('node:fs');
 const path = require('node:path');
-const readline = require('node:readline/promises');
+const readline = require('node:readline');
 const { Transform } = require('node:stream');
 const { pipeline } = require('node:stream/promises');
 const { spawnSync } = require('node:child_process');
@@ -131,16 +131,20 @@ function postJSON(url, body) {
   });
 }
 
+function question(rl, prompt) {
+  return new Promise((resolve) => rl.question(prompt, resolve));
+}
+
 async function promptCredentials(username) {
   if (!process.stdin.isTTY) {
     throw new Error('Cannot prompt for credentials: stdin is not a terminal');
   }
   const rl = readline.createInterface({ input: process.stdin, output: process.stderr, terminal: false });
   try {
-    username = username || await rl.question('Username: ');
+    username = username || await question(rl, 'Username: ');
     const echoOff = spawnSync('stty', ['-echo'], { stdio: 'inherit' }).status === 0;
     try {
-      const password = await rl.question('Password: ');
+      const password = await question(rl, 'Password: ');
       if (echoOff) process.stderr.write('\n');
       return { username, password };
     } finally {
