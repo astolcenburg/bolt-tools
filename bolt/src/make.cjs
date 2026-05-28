@@ -17,7 +17,8 @@
  * limitations under the License.
 */
 
-const { statSync, rmSync, readFileSync, mkdirSync } = require('node:fs');
+const { statSync, rmSync, readFileSync, mkdirSync, readdirSync, writeFileSync } = require('node:fs');
+const { dirname, basename } = require('node:path');
 const { assert } = require('node:console');
 const { exec, makeWorkDir, linkOrCopySync } = require('./utils.cjs');
 const { pack } = require('./pack.cjs');
@@ -72,11 +73,30 @@ function validateFilePath(path) {
   return null;
 }
 
-function bitbakeMakeOCIImage(config) {
+function writeSbomConf(workDir, mode) {
+  const path = `${workDir}/sbom.conf`;
+  const cond = mode === 'full'
+    ? '1'
+    : "${@'1' if 'GPL' in (d.getVar('LICENSE') or '') and not any(bb.data.inherits_class(c, d) for c in ('native','nativesdk','cross','crosssdk','cross-canadian')) else '0'}";
+
+  writeFileSync(
+    path,
+    `INHERIT += "create-spdx"\n` +
+    `SPDX_PRETTY = "1"\n` +
+    `SPDX_INCLUDE_SOURCES = "${cond}"\n` +
+    `SPDX_ARCHIVE_SOURCES = "${cond}"\n`
+  );
+
+  return path;
+}
+
+function bitbakeMakeOCIImage(config, options, workDir) {
   detectBitbakeEnvironment();
-  exec(`bitbake ${config.image}`, { stdio: 'inherit' });
+  const noSstate = options.noSstate ? ' --no-setscene' : '';
+  const postread = options.sbom ? ` -R "${writeSbomConf(workDir, options.sbom)}"` : '';
+  exec(`bitbake${noSstate}${postread} ${config.image}`, { stdio: 'inherit' });
   const defaultImage = `${process.env.BUILDDIR}/tmp-glibc/deploy/images/arm/${config.image}.tar`;
-  let result = validateFilePath(defaultImage) ??
+  const result = validateFilePath(defaultImage) ??
     validateFilePath(`${process.env.BUILDDIR}/tmp-glibc/deploy/images/arm64/${config.image}.tar`) ??
     validateFilePath(`${process.env.BUILDDIR}/tmp-glibc/deploy/images/amd64/${config.image}.tar`);
 
@@ -88,7 +108,7 @@ function bitbakeMakeOCIImage(config) {
 }
 
 async function make(packageAlias, options) {
-  let workDir = makeWorkDir();
+  const workDir = makeWorkDir();
   try {
     await makeCommand(packageAlias, workDir, options);
   } finally {
@@ -113,6 +133,15 @@ async function makeCommand(packageAlias, workDir, options) {
   }
 
   let contentFile;
+  let imageTarPath;
+
+  if (options.sbom && !packageBoltConfig?.bitbake?.image) {
+    throw new Error(`--sbom is only supported for bitbake targets`);
+  }
+
+  if (options.noSstate && !packageBoltConfig?.bitbake?.image) {
+    throw new Error(`--no-sstate is only supported for bitbake targets`);
+  }
 
   if (packageBoltConfig?.bitbake?.image) {
     const packageRootfsDir = `${workDir}/${packageConfig.getFullName()}-rootfs`;
@@ -126,8 +155,9 @@ async function makeCommand(packageAlias, workDir, options) {
     assert(last.getFullName() === packageConfig.getFullName());
 
     contentFile = packageRootfsDir + ".tgz";
+    imageTarPath = bitbakeMakeOCIImage(packageBoltConfig.bitbake, options, workDir);
     const platform = PackageConfig.makePlatformConfigFromOCIImageConfig(
-      extract(bitbakeMakeOCIImage(packageBoltConfig.bitbake), contentFile, { returnConfig: true })
+      extract(imageTarPath, contentFile, { returnConfig: true })
     );
     packageConfigBuilder.setPlatform(platform);
 
@@ -162,6 +192,41 @@ async function makeCommand(packageAlias, workDir, options) {
     packageConfigBuilder
       .updateVersionNameIfNotSpecified(packageConfigStore.getPath())
       .store(packageConfigPath);
+
+    if (options.sbom) {
+      const imageName = packageBoltConfig.bitbake.image;
+      const imageDir = dirname(imageTarPath);
+      const machine = basename(imageDir);
+      const deployDir = dirname(dirname(imageDir));
+      const sbomFile = `${imageName}-${machine}.spdx.tar.zst`;
+      const sbomLink = `${imageDir}/${sbomFile}`;
+      const licenseManifest = `${deployDir}/licenses/${imageName}-${machine}/license.manifest`;
+
+      if (!statSync(sbomLink, { throwIfNoEntry: false })) {
+        throw new Error(`SBOM file not found: ${sbomLink}`);
+      }
+      if (!statSync(licenseManifest, { throwIfNoEntry: false })) {
+        throw new Error(`License manifest not found: ${licenseManifest}`);
+      }
+
+      const sbomBase = `${process.cwd()}/sbom/${machine}/${packageConfig.getFullName()}`;
+      const sbomExtractDir = `${sbomBase}/sbom`;
+
+      rmSync(sbomBase, { recursive: true, force: true });
+      mkdirSync(sbomExtractDir, { recursive: true });
+      exec(`tar --zstd -xf "${sbomLink}" -C "${sbomExtractDir}"`);
+      linkOrCopySync(licenseManifest, `${sbomBase}/license.manifest`, true);
+
+      const recipesDir = `${deployDir}/spdx/${machine}/recipes`;
+      const recipeSources = statSync(recipesDir, { throwIfNoEntry: false })?.isDirectory()
+        ? readdirSync(recipesDir).filter(name => name.startsWith('recipe-') && name.endsWith('.tar.zst'))
+        : [];
+
+      for (const name of recipeSources) {
+        linkOrCopySync(`${recipesDir}/${name}`, `${sbomExtractDir}/${name}`, true);
+      }
+      console.log(`Wrote SBOM to ${sbomExtractDir} (${recipeSources.length} recipe source archives)`);
+    }
 
     pack(packageConfigPath, contentFile, options);
 
@@ -212,6 +277,23 @@ exports.makeOptions = {
       return true;
     }
     return false;
+  },
+
+  sbom(params, result) {
+    const v = params.options.sbom;
+    if (v === '') {
+      result.sbom = 'full';
+      return true;
+    }
+    if (v === 'full' || v === 'with-gpl-sources') {
+      result.sbom = v;
+      return true;
+    }
+    return false;
+  },
+
+  "no-sstate"(params, result) {
+    return (result.noSstate = (params.options["no-sstate"] === ''));
   },
 
   "force-install"(params, result) {
