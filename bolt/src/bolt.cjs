@@ -32,7 +32,7 @@ const { fetch, fetchOptions } = require('./fetch.cjs');
 function help() {
   console.log(`
 Usage:
-  bolt make <target> [--install] [--force-install] [--sbom[=full|with-gpl-sources]] [--no-sstate] [--key=<key.pem>] [--cert=<cert.pem>]
+  bolt make <target> [--install] [--force-install] [--sbom[=full|with-gpl-sources|optimized]] [--no-sstate] [--key=<key.pem>] [--cert=<cert.pem>]
       Build a bolt package using <target>.bolt.json
       --install           Also installs the package into the Local Package Store
       --force-install     Installs the package, overwriting any existing package with the same name
@@ -42,6 +42,12 @@ Usage:
                           with-gpl-sources - archive sources only for GPL-family recipes
                             whose binaries reach the image (skips native/nativesdk/cross
                             /crosssdk/cross-canadian recipes)
+                          optimized - same bitbake configuration as with-gpl-sources,
+                            but post-processes the result: inlines external SPDX
+                            documents into a single image.spdx.json and copies only
+                            source archives for packages that reach the image.
+                            Requires SPDX 2.2 format; if problems arise, use
+                            with-gpl-sources instead.
       --no-sstate         Disable sstate cache restoration; forces a full rebuild (bitbake targets only)
       --key=<key.pem>     Sign the package using the given private key (PEM format)
       --cert=<cert.pem>   Store the given certificate together with the signature (requires --key)

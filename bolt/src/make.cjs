@@ -218,14 +218,24 @@ async function makeCommand(packageAlias, workDir, options) {
       linkOrCopySync(licenseManifest, `${sbomBase}/license.manifest`, true);
 
       const recipesDir = `${deployDir}/spdx/${machine}/recipes`;
-      const recipeSources = statSync(recipesDir, { throwIfNoEntry: false })?.isDirectory()
-        ? readdirSync(recipesDir).filter(name => name.startsWith('recipe-') && name.endsWith('.tar.zst'))
-        : [];
 
-      for (const name of recipeSources) {
-        linkOrCopySync(`${recipesDir}/${name}`, `${sbomExtractDir}/${name}`, true);
+      if (options.sbom === 'optimized') {
+        const { makeOptimizedSbom } = require('./make-sbom-optimized.cjs');
+        makeOptimizedSbom({
+          sbomBase,
+          recipesDir,
+          imageName,
+          machine,
+        });
+      } else {
+        const recipeSources = statSync(recipesDir, { throwIfNoEntry: false })?.isDirectory()
+          ? readdirSync(recipesDir).filter(name => name.startsWith('recipe-') && name.endsWith('.tar.zst'))
+          : [];
+        for (const name of recipeSources) {
+          linkOrCopySync(`${recipesDir}/${name}`, `${sbomExtractDir}/${name}`, true);
+        }
+        console.log(`Wrote SBOM to ${sbomExtractDir} (${recipeSources.length} recipe source archives)`);
       }
-      console.log(`Wrote SBOM to ${sbomExtractDir} (${recipeSources.length} recipe source archives)`);
     }
 
     pack(packageConfigPath, contentFile, options);
@@ -285,7 +295,7 @@ exports.makeOptions = {
       result.sbom = 'full';
       return true;
     }
-    if (v === 'full' || v === 'with-gpl-sources') {
+    if (v === 'full' || v === 'with-gpl-sources' || v === 'optimized') {
       result.sbom = v;
       return true;
     }

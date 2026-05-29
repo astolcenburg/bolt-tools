@@ -8,7 +8,7 @@ by using instructions defined in `bolt.json` configuration files.
 ## Usage
 
 ```
-bolt make <target> [--install] [--force-install] [--sbom[=full|with-gpl-sources]] [--no-sstate] [--key=<key.pem>] [--cert=<cert.pem>]
+bolt make <target> [--install] [--force-install] [--sbom[=full|with-gpl-sources|optimized]] [--no-sstate] [--key=<key.pem>] [--cert=<cert.pem>]
 ```
 
 - `<target>` corresponds to a file named `<target>.bolt.json`. Example: `bolt make myapp` looks for `myapp.bolt.json`.
@@ -25,7 +25,7 @@ bolt make <target> [--install] [--force-install] [--sbom[=full|with-gpl-sources]
 | (none)                  | Builds the package but does not install it.                                          |
 | --install               | Installs the generated package into the [local package store](#local-package-store). |
 | --force-install         | Same as `--install`, but overwrites any existing package with the same name.         |
-| --sbom\[=MODE\]         | Generates a SPDX SBOM during the bitbake build. `MODE` is one of `full` (default when no value is given) or `with-gpl-sources`. See [SBOM Generation](#sbom-generation). Only valid for [`bitbake`](#bitbake) targets; using it with a [`direct`](#direct) target causes `bolt make` to fail. |
+| --sbom\[=MODE\]         | Generates a SPDX SBOM during the bitbake build. `MODE` is one of `full` (default when no value is given), `with-gpl-sources`, or `optimized`. See [SBOM Generation](#sbom-generation). Only valid for [`bitbake`](#bitbake) targets; using it with a [`direct`](#direct) target causes `bolt make` to fail. |
 | --no-sstate             | Passes `--no-setscene` to `bitbake`, disabling sstate cache restoration so every task is re-executed. Only valid for [`bitbake`](#bitbake) targets; using it with a [`direct`](#direct) target causes `bolt make` to fail. |
 | --key=\<key.pem\>       | Signs the package using the specified RSA private key (PEM format). Produces a [cosign-compatible](https://github.com/rdkcentral/oci-package-spec/blob/main/format.md#signature-manifest) signature manifest inside the bolt package. |
 | --cert=\<cert.pem\>     | Stores the given certificate together with the signature. The certificate must match the private key. Requires `--key`. |
@@ -118,6 +118,12 @@ The `SPDX_INCLUDE_SOURCES` / `SPDX_ARCHIVE_SOURCES` block depends on the SBOM mo
   SPDX_INCLUDE_SOURCES = "${@'1' if 'GPL' in (d.getVar('LICENSE') or '') and not any(bb.data.inherits_class(c, d) for c in ('native','nativesdk','cross','crosssdk','cross-canadian')) else '0'}"
   SPDX_ARCHIVE_SOURCES = "${@'1' if 'GPL' in (d.getVar('LICENSE') or '') and not any(bb.data.inherits_class(c, d) for c in ('native','nativesdk','cross','crosssdk','cross-canadian')) else '0'}"
   ```
+- **`optimized`**: uses the same bitbake configuration as `with-gpl-sources`,
+  but applies post-processing to the generated SBOM: external SPDX documents are
+  inlined into a single `image.spdx.json`, and only source archives for packages
+  that reach the image (filtered via `CONTAINS` / `RUNTIME_DEPENDENCY_OF`
+  traversal) are copied. This mode requires the SBOM to be in SPDX 2.2 format.
+  In case of problems, `with-gpl-sources` is recommended as an alternative.
 
 After the build, before the `.bolt` package is produced, `bolt make` locates the
 Yocto-managed `<image>-<machine>.spdx.tar.zst` symlink in `DEPLOY_DIR_IMAGE` (the machine
@@ -130,12 +136,23 @@ sbom/<machine>/<id>+<version>/
 ├── sbom/                  # extracted contents of <image>-<machine>.spdx.tar.zst
 │                          # and per-recipe source archives (recipe-*.tar.zst)
 │                          # copied from ${DEPLOY_DIR}/spdx/<machine>/recipes/
+├── image.spdx.json        # only in `optimized` mode: a single SPDX document
+│                          # with all external SPDX docs inlined
 └── license.manifest       # copied from Yocto's per-image licenses directory
 ```
 
-Per-recipe source archives are copied best-effort: if
-`${DEPLOY_DIR}/spdx/<machine>/recipes/` is missing or contains no `recipe-*.tar.zst`
-entries, the SBOM tree is still generated, just without the source archives.
+In `full` and `with-gpl-sources` modes, per-recipe source archives are copied
+best-effort: if `${DEPLOY_DIR}/spdx/<machine>/recipes/` is missing or contains no
+`recipe-*.tar.zst` entries, the SBOM tree is still generated, just without the
+source archives.
+
+In `optimized` mode, per-recipe source archives are copied selectively: only
+archives for packages that actually reach the image (determined by walking
+`CONTAINS` and `RUNTIME_DEPENDENCY_OF` relationships from the image package) and
+whose license requires sources (GPL-family or `NOASSERTION`) are copied. Packages
+with no `packageFileName` recorded in the SPDX document are reported via a
+warning and skipped; if `packageFileName` is set but the archive is missing on
+disk, `bolt make` fails.
 
 The `<id>+<version>/` subtree is recreated on every run, but only for the machine being
 built — SBOM trees for other machines are left untouched. `bolt make` fails (before the
