@@ -121,10 +121,6 @@ async function makeCommand(packageAlias, workDir, options) {
   const packageConfig = packageConfigStore.getTopConfig();
   const packageBoltConfig = packageConfigStore.getTopBoltConfig();
 
-  if (!packageConfig) {
-    throw new Error(`Package config for ${packageAlias} not found!`);
-  }
-
   const packageConfigBuilder = new PackageConfigBuilder(packageConfig);
   const packageStore = PackageStore.find(workDir);
 

@@ -18,64 +18,78 @@
 */
 
 const { statSync, readFileSync } = require('node:fs');
-const { resolve, isAbsolute } = require('path');
+const { resolve, isAbsolute, dirname, join } = require('path');
 const { PackageConfig } = require('./PackageConfig.cjs');
 
-const SUBDIR = "/package-configs/";
+const PACKAGE_CONFIGS_DIR = "package-configs";
 const MAX_DEPTH = 100;
 
 class PackageConfigStore {
-  static parsePotentialConfig(path) {
-    if (statSync(path, { throwIfNoEntry: false })?.isFile()) {
-      return PackageConfig.fromPath(path);
+  static parsePackageConfig(path) {
+    if (!statSync(path, { throwIfNoEntry: false })?.isFile()) {
+      throw new Error(`Package config ${path} not found!`);
     }
-    return null;
+    const result = PackageConfig.fromPath(path);
+    if (!result) {
+      throw new Error(`Package config ${path} is invalid!`);
+    }
+    return result;
   }
 
   static parsePotentialBoltConfig(path) {
     if (statSync(path, { throwIfNoEntry: false })?.isFile()) {
       const boltConfig = JSON.parse(readFileSync(path));
-      if (boltConfig.config) {
-        let packageConfigPath = boltConfig.config;
-        if (!isAbsolute(packageConfigPath)) {
-          packageConfigPath = resolve(path + "/../" + packageConfigPath);
-        }
-        return PackageConfigStore.parsePotentialConfig(packageConfigPath);
+      if (!boltConfig.config) {
+        throw new Error(`Bolt config ${path} is missing the required "config" field!`);
       }
+      let packageConfigPath = boltConfig.config;
+      if (!isAbsolute(packageConfigPath)) {
+        packageConfigPath = resolve(dirname(path), packageConfigPath);
+      }
+      return {
+        boltConfigPath: resolve(path),
+        boltConfig,
+        packageConfig: PackageConfigStore.parsePackageConfig(packageConfigPath),
+      };
     }
     return null;
   }
 
   static findConfig(base, name) {
+    const searched = [];
+
+    let dir = resolve(base);
     for (let i = 0; i < MAX_DEPTH; ++i) {
-      const path = resolve(base + '/' + name);
+      const path = join(dir, name);
+      const subdirPath = join(dir, PACKAGE_CONFIGS_DIR, name);
+      searched.push(path, subdirPath);
+
       const result =
         PackageConfigStore.parsePotentialBoltConfig(path) ??
-        PackageConfigStore.parsePotentialBoltConfig(resolve(base + SUBDIR + name));
+        PackageConfigStore.parsePotentialBoltConfig(subdirPath);
 
       if (result) {
         return result;
-      } else if (path !== '/' + name) {
-        base += '/..';
-      } else {
-        return null;
       }
+
+      const parent = dirname(dir);
+      if (parent === dir) {
+        break;
+      }
+      dir = parent;
     }
 
-    return null;
+    throw new Error(`Could not find ${name}. Searched in:\n${searched.join('\n')}`);
   }
 
   constructor(initDir, packageAlias) {
-    const topPackageConfig = PackageConfigStore.findConfig(initDir, packageAlias + '.bolt.json');
+    const { boltConfigPath, boltConfig, packageConfig } =
+      PackageConfigStore.findConfig(initDir, packageAlias + '.bolt.json');
 
-    if (topPackageConfig) {
-      this.path = resolve(topPackageConfig.getPath() + '/..');
-      this.topPackageConfig = topPackageConfig;
-      this.topPackageAlias = packageAlias;
-      this.topPackageBoltConfig = JSON.parse(readFileSync(this.path + '/' + packageAlias + '.bolt.json'));
-    } else {
-      this.path = null;
-    }
+    this.path = dirname(boltConfigPath);
+    this.topPackageConfig = packageConfig;
+    this.topPackageAlias = packageAlias;
+    this.topPackageBoltConfig = boltConfig;
   }
 
   getTopConfig() {
