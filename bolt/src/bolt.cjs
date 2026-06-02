@@ -32,8 +32,8 @@ const { fetch, fetchOptions } = require('./fetch.cjs');
 function help() {
   console.log(`
 Usage:
-  bolt make <target> [--install] [--force-install] [--sbom[=full|with-gpl-sources|optimized]] [--no-sstate] [--key=<key.pem>] [--cert=<cert.pem>]
-      Build a bolt package using <target>.bolt.json
+  bolt make <target|target.bolt.json> [--install] [--force-install] [--sbom[=full|with-gpl-sources|optimized]] [--no-sstate] [--key=<key.pem>] [--cert=<cert.pem>]
+      Build a bolt package using <target>.bolt.json, or the given .bolt.json file
       --install           Also installs the package into the Local Package Store
       --force-install     Installs the package, overwriting any existing package with the same name
       --sbom[=MODE]       Generate SPDX SBOM (bitbake targets only). MODE is one of:
@@ -92,7 +92,8 @@ Usage:
       --userns=<true/false>  Enable/disable user namespace
 
 Where:
-  target        Basename of a file named <target>.bolt.json, which defines build instructions
+  target        Basename of a file named <target>.bolt.json, which defines build instructions,
+                or a path to a .bolt.json file to build from directly
                 see https://github.com/rdkcentral/bolt-tools/blob/main/bolt/docs/make.md
 
   oci-image.tar An OCI-compliant image packaged as a tarball

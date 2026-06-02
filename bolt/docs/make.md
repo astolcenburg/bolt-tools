@@ -8,12 +8,12 @@ by using instructions defined in `bolt.json` configuration files.
 ## Usage
 
 ```
-bolt make <target> [--install] [--force-install] [--sbom[=full|with-gpl-sources|optimized]] [--no-sstate] [--key=<key.pem>] [--cert=<cert.pem>]
+bolt make <target|target.bolt.json> [--install] [--force-install] [--sbom[=full|with-gpl-sources|optimized]] [--no-sstate] [--key=<key.pem>] [--cert=<cert.pem>]
 ```
 
-- `<target>` corresponds to a file named `<target>.bolt.json`. Example: `bolt make myapp` looks for `myapp.bolt.json`.
+- `<target>` corresponds to a file named `<target>.bolt.json`. Example: `bolt make myapp` looks for `myapp.bolt.json`, located as described in the [locating bolt.json files](#locating-boltjson-files) section.
+- Alternatively, pass a `.bolt.json` file directly. Example: `bolt make ./configs/myapp.bolt.json` builds from exactly that file, with no tree search.
 - This file must follow the format described in the [format of bolt.json files](#format-of-boltjson-files) section.
-- The tool locates the file as described in the [locating bolt.json files](#locating-boltjson-files) section.
 - Upon successful execution a [bolt package](https://github.com/rdkcentral/oci-package-spec) is created in the current working directory.
 - The bolt package is named `<id>+<version>.bolt`, where [id](https://github.com/rdkcentral/oci-package-spec/blob/main/metadata.md#id) and
 [version](https://github.com/rdkcentral/oci-package-spec/blob/main/metadata.md#version) are extracted from the package config file.
@@ -206,6 +206,9 @@ When running `bolt make <target>`, the tool searches for `<target>.bolt.json` by
 From the starting directory, the tool traverses upward toward the filesystem root, and at each level looks in:
 - The current directory
 - The `package-configs` subdirectory
+
+When the argument is itself a path ending in `.bolt.json` (for example `bolt make ./configs/myapp.bolt.json`),
+no search is performed: the tool builds strictly from that file, and fails if it does not exist.
 
 ## Examples
 

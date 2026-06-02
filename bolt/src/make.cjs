@@ -116,8 +116,18 @@ async function make(packageAlias, options) {
   }
 }
 
+function resolvePackageConfigStore(target) {
+  if (target.endsWith('.bolt.json')) {
+    if (!statSync(target, { throwIfNoEntry: false })?.isFile()) {
+      throw new Error(`Bolt config file not found: ${target}`);
+    }
+    return new PackageConfigStore(dirname(target), basename(target, '.bolt.json'));
+  }
+  return new PackageConfigStore(detectMainLayerDir() ?? process.cwd(), target);
+}
+
 async function makeCommand(packageAlias, workDir, options) {
-  const packageConfigStore = new PackageConfigStore(detectMainLayerDir() ?? process.cwd(), packageAlias);
+  const packageConfigStore = resolvePackageConfigStore(packageAlias);
   const packageConfig = packageConfigStore.getTopConfig();
   const packageBoltConfig = packageConfigStore.getTopBoltConfig();
 
