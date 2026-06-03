@@ -17,24 +17,17 @@
  * limitations under the License.
 */
 
-const { renameSync, copyFileSync, linkSync, unlinkSync, mkdtempSync } = require('node:fs');
+const { renameSync, copyFileSync, linkSync, unlinkSync, mkdtempSync, statSync } = require('node:fs');
 const { join, isAbsolute, resolve } = require('node:path');
-const { execSync } = require('node:child_process');
+const { execSync, execFileSync } = require('node:child_process');
 const config = require('./config.cjs');
 
-function execNoOutput(command, params) {
-  if (config.verbose) console.log(command);
-
+function runSync(params, run) {
   try {
-    const stdout = execSync(
-      command,
-      Object.assign({
-        stdio: 'pipe',
-        encoding: 'utf8',
-      }, params)
-    );
-
-    return stdout;
+    return run(Object.assign({
+      stdio: 'pipe',
+      encoding: 'utf8',
+    }, params));
   } catch (err) {
 
     if (err.code) {
@@ -50,8 +43,20 @@ function execNoOutput(command, params) {
   }
 }
 
+function execNoOutput(command, params) {
+  if (config.verbose) console.log(command);
+  return runSync(params, opts => execSync(command, opts));
+}
+
 function exec(command, params) {
   const output = execNoOutput(command, params);
+  if (config.verbose && output) console.log(output.trim());
+  return output;
+}
+
+function execv(file, args, params) {
+  if (config.verbose) console.log(`${file} ${args.join(' ')}`);
+  const output = runSync(params, opts => execFileSync(file, args, opts));
   if (config.verbose && output) console.log(output.trim());
   return output;
 }
@@ -106,10 +111,18 @@ function resolvePath(resolveDir, path) {
   return isAbsolute(path) ? path : resolve(resolveDir, path);
 }
 
+function assertFile(path) {
+  if (!statSync(path).isFile()) {
+    throw new Error(`Not a file: ${path}`);
+  }
+}
+
 exports.exec = exec;
+exports.execv = execv;
 exports.execNoOutput = execNoOutput;
 exports.moveSync = moveSync;
 exports.linkOrCopySync = linkOrCopySync;
 exports.printError = printError;
 exports.makeWorkDir = makeWorkDir;
 exports.resolvePath = resolvePath;
+exports.assertFile = assertFile;

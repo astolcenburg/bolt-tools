@@ -20,7 +20,7 @@
 const { makeArtifactManifest } = require('./artifact-manifest.cjs');
 const sha256 = require('./tools/sha256.cjs');
 const { ZIPPackageBuilder } = require('./ZIPPackageBuilder.cjs');
-const { exec } = require('./utils.cjs');
+const { exec, execv, assertFile } = require('./utils.cjs');
 const { statSync, mkdirSync, rmSync, readFileSync } = require('node:fs');
 
 function validateConfig(config) {
@@ -36,8 +36,8 @@ function validateConfig(config) {
 }
 
 function pack(configFile, content, options) {
-  statSync(configFile);
-  statSync(content);
+  assertFile(configFile);
+  assertFile(content);
   const config = JSON.parse(readFileSync(configFile));
   validateConfig(config);
   const output = `${config.id}+${config.version}`;
@@ -63,9 +63,11 @@ function packInternal(content, config, output, options) {
   const builder = new ZIPPackageBuilder(output + ".bolt", output);
 
   const erofsTmpFile = output + '/erofs';
-  exec(`mkfs.erofs -zlz4 --all-root --tar --gzip ${erofsTmpFile} ${content}`);
+  execv('mkfs.erofs', ['-zlz4', '--all-root', '--tar', '--gzip', erofsTmpFile, content]);
   const erofsTmpFileStat = statSync(erofsTmpFile);
-  const verityInfo = exec(`veritysetup format ${erofsTmpFile} ${erofsTmpFile} --hash-offset=${erofsTmpFileStat.size}`).trim().split('\n');
+  const verityInfo = execv('veritysetup',
+    ['format', erofsTmpFile, erofsTmpFile, `--hash-offset=${erofsTmpFileStat.size}`]
+  ).trim().split('\n');
   let rootHash;
   let salt;
 

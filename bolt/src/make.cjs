@@ -20,7 +20,7 @@
 const { statSync, rmSync, readFileSync, mkdirSync, readdirSync, writeFileSync } = require('node:fs');
 const { dirname, basename } = require('node:path');
 const { assert } = require('node:console');
-const { exec, makeWorkDir, linkOrCopySync } = require('./utils.cjs');
+const { exec, execv, makeWorkDir, linkOrCopySync } = require('./utils.cjs');
 const { pack } = require('./pack.cjs');
 const { extract } = require('./extract.cjs');
 const { Package } = require('./Package.cjs');
@@ -181,6 +181,15 @@ async function makeCommand(packageAlias, workDir, options) {
       packageBuilder.merge(packageRootfsDir);
       packageBuilder.finish(packageLayerArchive);
       contentFile = packageLayerArchive;
+    }
+  } else if (packageBoltConfig?.direct?.archive) {
+    if (packageBoltConfig.direct.script) {
+      const scriptPath = packageConfigStore.resolveRelativePath(packageBoltConfig.direct.script);
+      execv(scriptPath, [], { cwd: dirname(scriptPath), stdio: 'inherit' });
+    }
+    contentFile = packageConfigStore.resolveRelativePath(packageBoltConfig.direct.archive);
+    if (!statSync(contentFile, { throwIfNoEntry: false })?.isFile()) {
+      throw new Error(`Archive not found: ${contentFile}`);
     }
   } else if (packageBoltConfig?.direct?.empty) {
     contentFile = workDir + '/empty.tgz';

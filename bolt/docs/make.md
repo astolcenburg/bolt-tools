@@ -62,6 +62,10 @@ bolt make myapp
 
 ### direct
 
+The `direct` property supports two modes:
+
+#### empty
+
 ```
   "direct": {
     "empty": true
@@ -70,6 +74,29 @@ bolt make myapp
 
 - Creates a package containing only the referenced config file.
 - No additional artifacts are included.
+
+#### archive
+
+```
+  "direct": {
+    "archive": "rootfs.tar.gz"
+  }
+```
+
+- Uses the specified gzip-compressed tar archive as the package rootfs content.
+- The archive path is resolved relative to the bolt.json file.
+- An optional `script` property can be specified to produce the archive before packaging:
+
+```
+  "direct": {
+    "script": "./build-rootfs.sh",
+    "archive": "output/rootfs.tar.gz"
+  }
+```
+
+- The script path is resolved relative to the bolt.json file.
+- The script runs with its working directory set to the directory in which the script is located.
+- A non-zero exit code from the script fails the build.
 
 ### bitbake
 

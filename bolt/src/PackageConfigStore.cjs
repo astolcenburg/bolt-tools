@@ -101,6 +101,13 @@ class PackageConfigStore {
   getPath() {
     return this.path;
   }
+
+  resolveRelativePath(relativePath) {
+    if (isAbsolute(relativePath)) {
+      throw new Error(`Path must be relative: ${relativePath}`);
+    }
+    return resolve(this.path, relativePath);
+  }
 }
 
 exports.PackageConfigStore = PackageConfigStore;
