@@ -185,7 +185,7 @@ async function makeCommand(packageAlias, workDir, options) {
         packageBuilder.merge(pkg.getLayerDir());
       }
 
-      packageBuilder.merge(packageRootfsDir);
+      packageBuilder.merge(packageRootfsDir, ['usr/share/common-licenses']);
       packageBuilder.finish(packageLayerArchive);
       contentFile = packageLayerArchive;
     }

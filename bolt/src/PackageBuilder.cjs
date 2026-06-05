@@ -17,7 +17,7 @@
  * limitations under the License.
 */
 
-const { readFileSync } = require('node:fs');
+const { readFileSync, existsSync, rmSync } = require('node:fs');
 const { exec } = require('./utils.cjs');
 
 class PackageBuilder {
@@ -28,8 +28,11 @@ class PackageBuilder {
     this.initialized = false;
   }
 
-  merge(rootfs) {
+  merge(rootfs, resetPaths = []) {
     if (this.initialized) {
+      for (const path of resetPaths) {
+        rmSync(`${this.workDir}/bundle/rootfs/${path}`, { recursive: true, force: true });
+      }
       exec(`rsync -crlpgoDX ${rootfs}/ ${this.workDir}/bundle/rootfs`);
       exec(`umoci repack --refresh-bundle --image ${this.workDir}/oci ${this.workDir}/bundle`);
     } else {
