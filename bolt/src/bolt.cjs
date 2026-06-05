@@ -27,6 +27,7 @@ const { pack, packOptions } = require('./pack.cjs');
 const { push, pushOptions } = require('./push.cjs');
 const { run, runOptions } = require('./run.cjs');
 const { make, makeOptions } = require('./make.cjs');
+const { edit, editOptions } = require('./edit.cjs');
 const { fetch, fetchOptions } = require('./fetch.cjs');
 
 function help() {
@@ -49,6 +50,15 @@ Usage:
                             Requires SPDX 2.2 format; if problems arise, use
                             with-gpl-sources instead.
       --no-sstate         Disable sstate cache restoration; forces a full rebuild (bitbake targets only)
+      --key=<key.pem>     Sign the package using the given private key (PEM format)
+      --cert=<cert.pem>   Store the given certificate together with the signature (requires --key)
+
+  bolt edit <package.bolt> [--config=<config.json>] [--set=<json>] [--key=<key.pem>] [--cert=<cert.pem>]
+      Replace the package config in an existing bolt package, reusing its content layer
+      The output package is renamed if the resulting config changes the id or version
+      See https://github.com/rdkcentral/bolt-tools/blob/main/bolt/docs/edit.md
+      --config=<config.json>  Package config to write into the package (defaults to the original)
+      --set=<json>        JSON object whose properties override the base config
       --key=<key.pem>     Sign the package using the given private key (PEM format)
       --cert=<cert.pem>   Store the given certificate together with the signature (requires --key)
 
@@ -124,6 +134,7 @@ const commands = {
   push: { args: 2, handler: push, options: pushOptions },
   run: { args: 2, handler: run, options: runOptions },
   make: { args: 1, handler: make, options: makeOptions },
+  edit: { args: 1, handler: edit, options: editOptions },
   fetch: { args: 1, handler: fetch, options: fetchOptions },
 };
 

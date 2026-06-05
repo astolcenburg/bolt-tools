@@ -104,6 +104,10 @@ class PackageConfig {
     return this.path;
   }
 
+  getPlatform() {
+    return this.data?.configuration?.["urn:rdk:config:platform"];
+  }
+
   isCompatible(platform) {
     let result = false;
 

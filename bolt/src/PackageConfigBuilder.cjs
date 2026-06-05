@@ -45,7 +45,7 @@ class PackageConfigBuilder {
   }
 
   updateVersionNameWithCustomDependency(pkg) {
-    const versionNameModifier = `/${pkg.getId()}+${pkg.getVersionName()}`;
+    const versionNameModifier = `/${pkg.getId()}+${pkg.getVersionName() ?? pkg.getVersion()}`;
 
     if (versionNameModifier.length <= this.versionNameSuffix.length) {
       if (!this.versionNameSuffix.includes(versionNameModifier)) {
@@ -60,6 +60,35 @@ class PackageConfigBuilder {
     }
 
     this.updateVersionName();
+  }
+
+  markAsEdited(pkg) {
+    const versionName = pkg.getVersionName() ?? pkg.getVersion();
+
+    if (versionName.startsWith("edit/")) {
+      this.versionName = versionName;
+      this.updateVersionName();
+    } else {
+      this.versionName = "edit";
+      this.updateVersionNameWithCustomDependency(pkg);
+    }
+
+    return this;
+  }
+
+  getData() {
+    return this.data;
+  }
+
+  inheritPlatform(platform) {
+    if (!platform || this.data.configuration?.["urn:rdk:config:platform"]) {
+      return this;
+    }
+
+    this.data.configuration = Object.assign({}, this.data.configuration);
+    this.data.configuration["urn:rdk:config:platform"] = platform;
+
+    return this;
   }
 
   setPlatform(platform) {

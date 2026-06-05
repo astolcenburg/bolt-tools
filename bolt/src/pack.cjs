@@ -20,6 +20,7 @@
 const { makeArtifactManifest } = require('./artifact-manifest.cjs');
 const sha256 = require('./tools/sha256.cjs');
 const { ZIPPackageBuilder } = require('./ZIPPackageBuilder.cjs');
+const { commonOptions } = require('./commonOptions.cjs');
 const { exec, execv, assertFile } = require('./utils.cjs');
 const { statSync, mkdirSync, rmSync, readFileSync } = require('node:fs');
 
@@ -35,6 +36,21 @@ function validateConfig(config) {
   }
 }
 
+function hasRalfpack() {
+  return exec(`which ralfpack >/dev/null; echo $?`).trim() === "0";
+}
+
+function ralfpackSignArgs(options) {
+  const args = [];
+  if (options.key) args.push("--key", options.key);
+  if (options.cert) args.push("--certificate", options.cert);
+  return args;
+}
+
+function ralfpackSign(packageFile, options) {
+  execv("ralfpack", ["sign", ...ralfpackSignArgs(options), packageFile]);
+}
+
 function pack(configFile, content, options) {
   assertFile(configFile);
   assertFile(content);
@@ -42,10 +58,8 @@ function pack(configFile, content, options) {
   validateConfig(config);
   const output = `${config.id}+${config.version}`;
 
-  if (exec(`which ralfpack >/dev/null; echo $?`).trim() === "0") {
-    let extraParams = options.key ? ` --key "${options.key}"` : "";
-    extraParams += options.cert ? ` --certificate "${options.cert}"` : "";
-    exec(`ralfpack create --config "${configFile}" --content "${content}" ${extraParams} --image-format erofs.lz4 "${output}.bolt"`);
+  if (hasRalfpack()) {
+    execv("ralfpack", ["create", "--config", configFile, "--content", content, ...ralfpackSignArgs(options), "--image-format", "erofs.lz4", `${output}.bolt`]);
   } else {
     rmSync(output, { recursive: true, force: true });
     mkdirSync(output, { recursive: true });
@@ -106,6 +120,10 @@ function packInternal(content, config, output, options) {
 
   const manifestInfo = builder.importObject(manifest);
 
+  writeOCIIndex(builder, { manifestInfo, id: config.id, options, signWithRalfpack: false });
+}
+
+function writeOCIIndex(builder, { manifestInfo, id, options, signWithRalfpack }) {
   const index = {
     "schemaVersion": 2,
     "mediaType": "application/vnd.oci.image.index.v1+json",
@@ -115,18 +133,20 @@ function packInternal(content, config, output, options) {
         "digest": manifestInfo.digest,
         "size": manifestInfo.size,
         "annotations": {
-          "org.opencontainers.image.ref.name": config.id
+          "org.opencontainers.image.ref.name": id
         }
       }
     ]
   };
 
-  if (options.key) {
+  const useRalfpack = options.key && (signWithRalfpack ?? hasRalfpack());
+
+  if (options.key && !useRalfpack) {
     // https://github.com/rdkcentral/oci-package-spec/blob/main/format.md#signature-layer-payload
     const signatureLayerPayload = {
       "critical": {
         "identity": {
-          "docker-reference": config.id,
+          "docker-reference": id,
         },
         "image": {
           "docker-manifest-digest": `${manifestInfo.digest}`,
@@ -194,27 +214,17 @@ function packInternal(content, config, output, options) {
   }
   builder.addString('index.json', JSON.stringify(index, null, 2));
   builder.addString('oci-layout', '{"imageLayoutVersion": "1.0.0"}');
-  builder.close();
+  const packageFile = builder.close();
+
+  if (useRalfpack) {
+    ralfpackSign(packageFile, options);
+  }
 }
 
 exports.pack = pack;
+exports.writeOCIIndex = writeOCIIndex;
 
 exports.packOptions = {
-  key(params, result) {
-    if (params.options.key !== "") {
-      result.key = params.options.key;
-    }
-    return !!result.key;
-  },
-
-  cert(params, result) {
-    if (params.options.cert !== "") {
-      if (!params.options.key) {
-        console.error('Error: --cert requires --key');
-        return false;
-      }
-      result.cert = params.options.cert;
-    }
-    return !!result.cert;
-  },
+  key: commonOptions.key,
+  cert: commonOptions.cert,
 }

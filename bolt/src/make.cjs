@@ -22,6 +22,7 @@ const { dirname, basename } = require('node:path');
 const { assert } = require('node:console');
 const { exec, execv, makeWorkDir, linkOrCopySync } = require('./utils.cjs');
 const { pack } = require('./pack.cjs');
+const { commonOptions } = require('./commonOptions.cjs');
 const { extract } = require('./extract.cjs');
 const { Package } = require('./Package.cjs');
 const { PackageStore } = require('./PackageStore.cjs');
@@ -276,23 +277,8 @@ async function makeCommand(packageAlias, workDir, options) {
 exports.make = make;
 
 exports.makeOptions = {
-  key(params, result) {
-    if (params.options.key !== "") {
-      result.key = params.options.key;
-    }
-    return !!result.key;
-  },
-
-  cert(params, result) {
-    if (params.options.cert !== "") {
-      if (!params.options.key) {
-        console.error('Error: --cert requires --key');
-        return false;
-      }
-      result.cert = params.options.cert;
-    }
-    return !!result.cert;
-  },
+  key: commonOptions.key,
+  cert: commonOptions.cert,
 
   install(params, result) {
     if (params.options.install === "") {

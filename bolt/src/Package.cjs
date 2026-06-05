@@ -97,13 +97,13 @@ class Package {
     throw new Error(`Package manifest not found in ${ociDir}!`);
   }
 
-  static getManifest(ociDir) {
+  static readManifest(ociDir) {
     const index = JSON.parse(readFileSync(ociDir + "/index.json"));
     return Package.getPackageManifest(ociDir, index);
   }
 
   static getConfigPath(ociDir) {
-    const manifest = Package.getManifest(ociDir);
+    const manifest = Package.readManifest(ociDir);
     return Package.getPathFromInfo(ociDir, manifest.config);
   }
 
@@ -119,7 +119,7 @@ class Package {
   }
 
   static extractLastLayer(ociDir, outDir) {
-    const manifest = Package.getManifest(ociDir);
+    const manifest = Package.readManifest(ociDir);
     const layer = manifest.layers.at(-1);
 
     if (layer.mediaType === "application/vnd.rdk.package.content.layer.v1.erofs+dmverity") {
@@ -135,6 +135,17 @@ class Package {
     this.workDir = workDir;
     this.ociDir = "";
     this.layerDir = "";
+  }
+
+  getManifest() {
+    if (!this.manifest) {
+      this.manifest = Package.readManifest(this.getOCIDir());
+    }
+    return this.manifest;
+  }
+
+  getBlobPath(entry) {
+    return Package.getPathFromInfo(this.getOCIDir(), entry);
   }
 
   getConfig() {
@@ -169,6 +180,10 @@ class Package {
 
   getPath() {
     return this.path;
+  }
+
+  getPlatform() {
+    return this.getConfig().getPlatform();
   }
 
   isCompatible(platform) {
