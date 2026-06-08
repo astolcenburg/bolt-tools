@@ -133,6 +133,7 @@ async function makeCommand(packageAlias, workDir, options) {
   const packageBoltConfig = packageConfigStore.getTopBoltConfig();
 
   const packageConfigBuilder = new PackageConfigBuilder(packageConfig);
+  packageConfigBuilder.resolveAutoValues(packageConfigStore.getPath());
   const packageStore = PackageStore.find(workDir);
 
   if (options.install && !packageStore) {

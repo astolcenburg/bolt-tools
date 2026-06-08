@@ -17,6 +17,7 @@ bolt make <target|target.bolt.json> [--install] [--force-install] [--sbom[=full|
 - Upon successful execution a [bolt package](https://github.com/rdkcentral/oci-package-spec) is created in the current working directory.
 - The bolt package is named `<id>+<version>.bolt`, where [id](https://github.com/rdkcentral/oci-package-spec/blob/main/metadata.md#id) and
 [version](https://github.com/rdkcentral/oci-package-spec/blob/main/metadata.md#version) are extracted from the package config file.
+- The `version` and dependency versions may be set to `"auto"` to derive them from git. See [Automatic Versioning](#automatic-versioning).
 
 ## Options
 
@@ -112,6 +113,36 @@ The `direct` property supports two modes:
   - `tmp-glibc/deploy/images/arm64/base-bolt-image.tar`
   - `tmp-glibc/deploy/images/amd64/base-bolt-image.tar`
 - The first found OCI image is packaged into the [bolt package](https://github.com/rdkcentral/oci-package-spec).
+
+## Automatic Versioning
+
+The package config's [version](https://github.com/rdkcentral/oci-package-spec/blob/main/metadata.md#version)
+and any [dependency](https://github.com/rdkcentral/oci-package-spec/blob/main/metadata.md#dependencies)
+version may be set to the literal string `"auto"`. When `bolt make` runs, every `"auto"` value is
+replaced with a version derived from the git repository that contains the `.bolt.json` file:
+
+1. If the current branch is a git-flow release branch (`release/<version>`), the part after
+   `release/` is used (for example, on `release/1.4.0` the version becomes `1.4.0`).
+2. Otherwise, the closest tag reachable from `HEAD` is used as-is. The tag is obtained with
+   `git describe --tags --abbrev=0` (for example, `1.3.2`).
+3. If there is no such tag, or the directory is not a git repository, `0.0.1` is used.
+
+All `"auto"` values in a single config resolve to the same version. Dependency versions that are
+not `"auto"` are left unchanged. The resolved version is used for the package name
+(`<id>+<version>.bolt`), for [dependency resolution](#dependency-handling), and in the config
+stored inside the package.
+
+Example config using automatic versioning:
+
+```
+{
+  "id": "com.rdkcentral.myapp",
+  "version": "auto",
+  "dependencies": {
+    "com.rdkcentral.mylib": "auto"
+  }
+}
+```
 
 ## SBOM Generation
 

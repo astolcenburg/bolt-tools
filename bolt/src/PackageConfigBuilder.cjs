@@ -20,6 +20,16 @@
 const { writeFileSync } = require('node:fs');
 const { exec } = require('./utils.cjs');
 
+const RELEASE_BRANCH_PREFIX = 'release/';
+
+function autoVersion(repoPath) {
+  const branch = exec('git rev-parse --abbrev-ref HEAD 2>/dev/null || true', { cwd: repoPath }).trim();
+  if (branch.startsWith(RELEASE_BRANCH_PREFIX) && branch.length > RELEASE_BRANCH_PREFIX.length) {
+    return branch.slice(RELEASE_BRANCH_PREFIX.length);
+  }
+  return exec('git describe --tags --abbrev=0 2>/dev/null || true', { cwd: repoPath }).trim() || '0.0.1';
+}
+
 class PackageConfigBuilder {
   constructor(baseConfig) {
     this.data = baseConfig.data;
@@ -32,6 +42,25 @@ class PackageConfigBuilder {
     const versionName = this.versionName + this.versionNameSuffix;
     if (this.data.versionName !== versionName) {
       this.data = Object.assign({}, this.data, { versionName });
+    }
+  }
+
+  resolveAutoValues(repoPath) {
+    let version;
+
+    if (this.data.version === 'auto') {
+      version = autoVersion(repoPath);
+      this.data.version = version;
+    }
+
+    const dependencies = this.data.dependencies ?? {};
+    for (const id in dependencies) {
+      if (dependencies[id] === 'auto') {
+        if (version === undefined) {
+          version = autoVersion(repoPath);
+        }
+        dependencies[id] = version;
+      }
     }
   }
 
