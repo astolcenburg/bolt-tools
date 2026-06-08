@@ -114,6 +114,25 @@ The `direct` property supports two modes:
   - `tmp-glibc/deploy/images/amd64/base-bolt-image.tar`
 - The first found OCI image is packaged into the [bolt package](https://github.com/rdkcentral/oci-package-spec).
 
+#### exclude
+
+```
+  "bitbake": {
+    "image": "base-bolt-image",
+    "exclude": [
+      "usr/share/doc",
+      "usr/lib/opkg"
+    ]
+  }
+```
+
+- Optional list of rootfs-relative paths that are **not** copied into the bolt package, even when
+  they are present in the built OCI image.
+- Each entry is an exact path: a directory drops the whole subtree, a file drops just that file.
+- Paths must be relative and stay inside the rootfs (no leading `/`, no `..`); invalid entries fail the build.
+- Only this package's own content is filtered; files provided by [dependencies](#dependency-handling)
+  are not affected.
+
 ## Automatic Versioning
 
 The package config's [version](https://github.com/rdkcentral/oci-package-spec/blob/main/metadata.md#version)

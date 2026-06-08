@@ -18,7 +18,7 @@
 */
 
 const { statSync, rmSync, readFileSync, mkdirSync, readdirSync, writeFileSync } = require('node:fs');
-const { dirname, basename } = require('node:path');
+const { dirname, basename, isAbsolute } = require('node:path');
 const { assert } = require('node:console');
 const { exec, execv, makeWorkDir, linkOrCopySync } = require('./utils.cjs');
 const { pack } = require('./pack.cjs');
@@ -127,6 +127,18 @@ function resolvePackageConfigStore(target) {
   return new PackageConfigStore(detectMainLayerDir() ?? process.cwd(), target);
 }
 
+function validateExclude(exclude) {
+  if (!Array.isArray(exclude)) {
+    throw new Error(`bitbake.exclude must be an array of rootfs-relative paths`);
+  }
+  for (const path of exclude) {
+    const segments = typeof path === 'string' ? path.split('/').filter((segment) => segment !== '' && segment !== '.') : [];
+    if (segments.length === 0 || segments.includes('..') || isAbsolute(path)) {
+      throw new Error(`Invalid bitbake.exclude entry: ${JSON.stringify(path)} (must be a relative path inside the rootfs)`);
+    }
+  }
+}
+
 async function makeCommand(packageAlias, workDir, options) {
   const packageConfigStore = resolvePackageConfigStore(packageAlias);
   const packageConfig = packageConfigStore.getTopConfig();
@@ -154,6 +166,8 @@ async function makeCommand(packageAlias, workDir, options) {
   if (packageBoltConfig?.bitbake?.image) {
     const packageRootfsDir = `${workDir}/${packageConfig.getFullName()}-rootfs`;
     const packageLayerArchive = `${workDir}/${packageConfig.getFullName()}-layer.tgz`;
+    const exclude = packageBoltConfig.bitbake.exclude ?? [];
+    validateExclude(exclude);
     const packages = PackageDependencyResolver.getDependencies(
       packageConfig.getFullName(),
       new PackageProvider(packageStore, packageConfigStore)
@@ -169,7 +183,7 @@ async function makeCommand(packageAlias, workDir, options) {
     );
     packageConfigBuilder.setPlatform(platform);
 
-    if (packages.length) {
+    if (packages.length || exclude.length) {
       const packageRootfsArchive = contentFile;
       mkdirSync(packageRootfsDir, { recursive: true });
       exec(`tar xf ${packageRootfsArchive} -C ${packageRootfsDir}`);
@@ -186,7 +200,7 @@ async function makeCommand(packageAlias, workDir, options) {
         packageBuilder.merge(pkg.getLayerDir());
       }
 
-      packageBuilder.merge(packageRootfsDir, ['usr/share/common-licenses']);
+      packageBuilder.merge(packageRootfsDir, ['usr/share/common-licenses'], exclude);
       packageBuilder.finish(packageLayerArchive);
       contentFile = packageLayerArchive;
     }

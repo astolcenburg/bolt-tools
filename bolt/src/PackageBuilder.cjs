@@ -17,8 +17,8 @@
  * limitations under the License.
 */
 
-const { readFileSync, existsSync, rmSync } = require('node:fs');
-const { exec } = require('./utils.cjs');
+const { readFileSync } = require('node:fs');
+const { exec, removeUnder } = require('./utils.cjs');
 
 class PackageBuilder {
   constructor(workDir) {
@@ -28,10 +28,17 @@ class PackageBuilder {
     this.initialized = false;
   }
 
-  merge(rootfs, resetPaths = []) {
+  merge(rootfs, resetPaths = [], excludePaths = []) {
+    for (const path of excludePaths) {
+      if (!removeUnder(rootfs, path)) {
+        console.warn(`Excluded path not found, skipping: ${path}`);
+      }
+    }
     if (this.initialized) {
       for (const path of resetPaths) {
-        rmSync(`${this.workDir}/bundle/rootfs/${path}`, { recursive: true, force: true });
+        if (!removeUnder(`${this.workDir}/bundle/rootfs`, path)) {
+          console.warn(`Reset path not found, skipping: ${path}`);
+        }
       }
       exec(`rsync -crlpgoDX ${rootfs}/ ${this.workDir}/bundle/rootfs`);
       exec(`umoci repack --refresh-bundle --image ${this.workDir}/oci ${this.workDir}/bundle`);

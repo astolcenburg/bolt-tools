@@ -17,8 +17,8 @@
  * limitations under the License.
 */
 
-const { renameSync, copyFileSync, linkSync, unlinkSync, mkdtempSync, statSync } = require('node:fs');
-const { join, isAbsolute, resolve } = require('node:path');
+const { renameSync, copyFileSync, linkSync, unlinkSync, mkdtempSync, statSync, lstatSync, rmSync, realpathSync } = require('node:fs');
+const { join, dirname, basename, isAbsolute, resolve, relative, sep } = require('node:path');
 const { execSync, execFileSync } = require('node:child_process');
 const config = require('./config.cjs');
 
@@ -117,6 +117,29 @@ function assertFile(path) {
   }
 }
 
+function removeUnder(baseDir, relPath) {
+  const base = realpathSync(resolve(baseDir));
+  const target = resolve(base, relPath);
+
+  let realTarget;
+  try {
+    realTarget = join(realpathSync(dirname(target)), basename(target));
+  } catch (err) {
+    if (err.code === 'ENOENT') return false;
+    throw err;
+  }
+
+  const rel = relative(base, realTarget);
+  if (rel === '' || rel === '..' || rel.startsWith(`..${sep}`) || isAbsolute(rel)) {
+    throw new Error(`Refusing to remove ${JSON.stringify(relPath)}: resolves to or outside ${baseDir}`);
+  }
+  if (lstatSync(realTarget, { throwIfNoEntry: false })) {
+    rmSync(realTarget, { recursive: true, force: true });
+    return true;
+  }
+  return false;
+}
+
 exports.exec = exec;
 exports.execv = execv;
 exports.execNoOutput = execNoOutput;
@@ -126,3 +149,4 @@ exports.printError = printError;
 exports.makeWorkDir = makeWorkDir;
 exports.resolvePath = resolvePath;
 exports.assertFile = assertFile;
+exports.removeUnder = removeUnder;
