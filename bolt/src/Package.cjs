@@ -17,9 +17,10 @@
  * limitations under the License.
 */
 
-const { statSync, readFileSync, existsSync } = require('node:fs');
-const { exec } = require('./utils.cjs');
+const { statSync, readFileSync, existsSync, mkdirSync } = require('node:fs');
+const { execv } = require('./utils.cjs');
 const { PackageConfig } = require('./PackageConfig.cjs');
+const config = require('./config.cjs');
 const path = require('node:path');
 
 const PACKAGE_FILE_EXTENSION = ".bolt";
@@ -78,37 +79,8 @@ class Package {
       manifest.config?.mediaType === "application/vnd.rdk.package.config.v1+json";
   }
 
-  static getPackageManifest(ociDir, index) {
-    if (index.mediaType === "application/vnd.oci.image.index.v1+json") {
-      for (let manifestInfo of index.manifests) {
-        if (manifestInfo.mediaType === "application/vnd.oci.image.manifest.v1+json") {
-          const manifest = JSON.parse(readFileSync(Package.getPathFromInfo(ociDir, manifestInfo)));
-          if (Package.isPackageManifest(manifest)) {
-            return manifest;
-          }
-        }
-      }
-    }
-
-    if (Package.isPackageManifest(index)) {
-      return index;
-    }
-
-    throw new Error(`Package manifest not found in ${ociDir}!`);
-  }
-
-  static readManifest(ociDir) {
-    const index = JSON.parse(readFileSync(ociDir + "/index.json"));
-    return Package.getPackageManifest(ociDir, index);
-  }
-
-  static getConfigPath(ociDir) {
-    const manifest = Package.readManifest(ociDir);
-    return Package.getPathFromInfo(ociDir, manifest.config);
-  }
-
   static hasSignature(pkgPath) {
-    const index = JSON.parse(exec(`unzip -p "${pkgPath}" index.json`));
+    const index = JSON.parse(execv('unzip', ['-p', pkgPath, 'index.json']));
     for (const manifest of index.manifests ?? []) {
       const refName = manifest.annotations?.["org.opencontainers.image.ref.name"];
       if (refName?.endsWith(".sig")) {
@@ -118,14 +90,39 @@ class Package {
     return false;
   }
 
-  static extractLastLayer(ociDir, outDir) {
-    const manifest = Package.readManifest(ociDir);
-    const layer = manifest.layers.at(-1);
+  static mediaTypeToExtension(mediaType) {
+    const prefix = config.CONTENT_LAYER_MEDIA_TYPE_PREFIX;
 
-    if (layer.mediaType === "application/vnd.rdk.package.content.layer.v1.erofs+dmverity") {
-      exec(`fsck.erofs --preserve-perms ${Package.getPathFromInfo(ociDir, layer)} --extract=${outDir}`);
+    if (mediaType.startsWith(`${prefix}erofs`)) {
+      return 'erofs';
     } else {
-      throw new Error(`Not supported layer type: ${layer.mediaType}`);
+      switch (mediaType) {
+        case `${prefix}tar`:
+          return 'tar';
+        case `${prefix}tar+gzip`:
+          return 'tar.gz';
+        case `${prefix}zip`:
+          return 'zip';
+      }
+    }
+
+    return 'layer';
+  }
+
+  static extractLayer(layerPath, mediaType, outDir) {
+    const prefix = config.CONTENT_LAYER_MEDIA_TYPE_PREFIX;
+    mkdirSync(outDir, { recursive: true });
+
+    if (mediaType.startsWith(`${prefix}erofs`)) {
+      execv('fsck.erofs', ['--preserve-perms', layerPath, `--extract=${outDir}`]);
+    } else if (mediaType === `${prefix}tar`) {
+      execv('tar', ['xf', layerPath, '-C', outDir]);
+    } else if (mediaType === `${prefix}tar+gzip`) {
+      execv('tar', ['xzf', layerPath, '-C', outDir]);
+    } else if (mediaType === `${prefix}zip`) {
+      execv('unzip', ['-o', '-q', layerPath, '-d', outDir]);
+    } else {
+      throw new Error(`Not supported layer type: ${mediaType}`);
     }
   }
 
@@ -137,9 +134,34 @@ class Package {
     this.layerDir = "";
   }
 
+  getIndex() {
+    if (!this.index) {
+      this.index = JSON.parse(readFileSync(this.getIndexPath()));
+    }
+    return this.index;
+  }
+
   getManifest() {
     if (!this.manifest) {
-      this.manifest = Package.readManifest(this.getOCIDir());
+      const index = this.getIndex();
+      if (index.mediaType === "application/vnd.oci.image.index.v1+json") {
+        for (const info of index.manifests ?? []) {
+          if (info.mediaType === "application/vnd.oci.image.manifest.v1+json") {
+            const manifest = JSON.parse(readFileSync(this.getBlobPath(info)));
+            if (Package.isPackageManifest(manifest)) {
+              this.manifestInfo = info;
+              this.manifest = manifest;
+              return this.manifest;
+            }
+          }
+        }
+      }
+      if (Package.isPackageManifest(index)) {
+        this.manifestInfo = null;
+        this.manifest = index;
+        return this.manifest;
+      }
+      throw new Error(`Package manifest not found in ${this.getOCIDir()}!`);
     }
     return this.manifest;
   }
@@ -148,9 +170,87 @@ class Package {
     return Package.getPathFromInfo(this.getOCIDir(), entry);
   }
 
+  getIndexPath() {
+    return `${this.getOCIDir()}/index.json`;
+  }
+
+  getConfigPath() {
+    return this.getBlobPath(this.getManifest().config);
+  }
+
+  getManifestPath() {
+    this.getManifest();
+    return this.manifestInfo ? this.getBlobPath(this.manifestInfo) : this.getIndexPath();
+  }
+
+  getSignatureManifestPath() {
+    for (const info of this.getIndex().manifests ?? []) {
+      if (info.annotations?.["org.opencontainers.image.ref.name"]?.endsWith(".sig")) {
+        return this.getBlobPath(info);
+      }
+    }
+    return null;
+  }
+
+  getSignatureManifest() {
+    if (this.signatureManifest === undefined) {
+      const signatureManifestPath = this.getSignatureManifestPath();
+      this.signatureManifest = signatureManifestPath ? JSON.parse(readFileSync(signatureManifestPath)) : null;
+    }
+    return this.signatureManifest;
+  }
+
+  getSignatureConfigPath() {
+    const manifest = this.getSignatureManifest();
+    return manifest?.config ? this.getBlobPath(manifest.config) : null;
+  }
+
+  getSignatureLayerPath() {
+    const manifest = this.getSignatureManifest();
+    return manifest?.layers?.[0] ? this.getBlobPath(manifest.layers[0]) : null;
+  }
+
+  getSignatureCertificate() {
+    if (this.certificate === undefined) {
+      const manifest = this.getSignatureManifest();
+      this.certificate = manifest?.layers?.[0]?.annotations?.["dev.sigstore.cosign/certificate"] ?? null;
+    }
+    return this.certificate;
+  }
+
+  getSignature() {
+    if (this.signature === undefined) {
+      const manifest = this.getSignatureManifest();
+      this.signature = manifest?.layers?.[0]?.annotations?.["dev.cosignproject.cosign/signature"] ?? null;
+    }
+    return this.signature;
+  }
+
+  getContentLayer() {
+    const layer = this.getManifest().layers.at(-1);
+    if (!layer || layer.mediaType === "application/vnd.oci.empty.v1+json") {
+      return null;
+    }
+    const offset = parseInt(layer.annotations?.["org.rdk.package.content.dmverity.offset"], 10);
+    return {
+      mediaType: layer.mediaType,
+      path: this.getBlobPath(layer),
+      hasDmverity: layer.mediaType.includes("dmverity"),
+      dmverityOffset: Number.isInteger(offset) && offset > 0 ? offset : undefined,
+    };
+  }
+
+  extractRootfs(outDir) {
+    const layer = this.getContentLayer();
+    if (!layer) {
+      throw new Error(`Package has no content layer`);
+    }
+    Package.extractLayer(layer.path, layer.mediaType, outDir);
+  }
+
   getConfig() {
     if (!this.config) {
-      this.config = PackageConfig.fromPath(Package.getConfigPath(this.getOCIDir()));
+      this.config = PackageConfig.fromPath(this.getConfigPath());
       if (!this.config) {
         throw new Error(`Package config is invalid in ${this.getOCIDir()}`);
       }
@@ -198,10 +298,10 @@ class Package {
     if (!this.ociDir) {
       const ociDir = this.workDir + '/' + this.fullName;
       if (!existsSync(ociDir)) {
-        exec(`cd ${this.workDir} && unzip -o ${this.path} -d ${this.fullName}`);
-        statSync(ociDir);
-        this.ociDir = ociDir;
+        execv('unzip', ['-o', this.path, '-d', ociDir]);
       }
+      statSync(ociDir);
+      this.ociDir = ociDir;
     }
     return this.ociDir;
   }
@@ -210,10 +310,10 @@ class Package {
     if (!this.layerDir) {
       const layerDir = `${this.workDir}/${this.getFullName()}-layer`;
       if (!existsSync(layerDir)) {
-        Package.extractLastLayer(this.getOCIDir(), layerDir);
-        statSync(layerDir);
-        this.layerDir = layerDir;
+        this.extractRootfs(layerDir);
       }
+      statSync(layerDir);
+      this.layerDir = layerDir;
     }
     return this.layerDir;
   }

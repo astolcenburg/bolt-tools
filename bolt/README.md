@@ -38,8 +38,32 @@ Usage:
   bolt diff <bottom-oci-image.tar> <top-oci-image.tar> <layer.tgz>
       Create a diff layer that transforms the bottom image into the top image
 
+  bolt extract <package.bolt> [--out=<dir>] [--package-config[=<path>]] [--manifest[=<path>]]
+                              [--index[=<path>]] [--layer[=<path>]] [--signature[=<path>]]
+                              [--signature-manifest[=<path>]] [--signature-config[=<path>]]
+                              [--signature-layer[=<path>]] [--signature-certificate[=<path>]]
+                              [--rootfs[=<dir>]] [--package[=<dir>]]
+      Extract components from a bolt package. Components are written into the --out directory
+      under a name formed from the component and its format. With no flags, all available
+      components are extracted and --out defaults to a <id>+<version>/ directory; with at least
+      one flag it defaults to the current directory. A flag may carry its own path, or "-" to
+      write to stdout (single-file components only).
+      See https://github.com/rdkcentral/bolt-tools/blob/main/bolt/docs/extract.md
+      --out=<dir>             Directory to extract components into
+      --package-config        The package config metadata (JSON)
+      --manifest              The OCI image manifest (JSON)
+      --index                 The OCI index.json
+      --layer                 The content layer payload (erofs, tar, tar+gzip or zip); for erofs the dm-verity hash tree is stripped
+      --signature             The raw cosign signature, if the package is signed
+      --signature-manifest    The cosign signature manifest (JSON), if the package is signed
+      --signature-config      The cosign signature manifest config blob (JSON), if the package is signed
+      --signature-layer       The cosign simple signing payload (JSON), if the package is signed
+      --signature-certificate The signing certificate, if present
+      --rootfs                The unpacked filesystem contents (directory)
+      --package               The complete OCI layout, including the raw layer blob (directory)
+
   bolt extract <oci-image.tar> <layer.tgz>
-      Extract the top filesystem layer from an OCI image
+      [DEPRECATED] Extract the top filesystem layer from an OCI image
 
   bolt pack <config.json> <layer.tgz> [--key=<key.pem>] [--cert=<cert.pem>]
       Combine a package config and a rootfs layer into a bolt package
@@ -96,6 +120,7 @@ Global options (can be used with any command):
   --verbose     Print detailed output during execution
 ```
 
+A detailed description of the `bolt extract` command can be found in the [docs/extract.md](docs/extract.md) file.
 A detailed description of the `bolt fetch` command can be found in the [docs/fetch.md](docs/fetch.md) file.
 A detailed description of the `bolt make` command can be found in the [docs/make.md](docs/make.md) file.
 A detailed description of the `bolt push` command can be found in the [docs/push.md](docs/push.md) file.

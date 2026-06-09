@@ -37,3 +37,6 @@ exports.DEFAULT_GID = 34567;
 exports.PROCESS_HOME_DIR = "/home";
 exports.PACKAGE_MANAGER_CALLSIGN = "org.rdk.PackageManagerRDKEMS";
 exports.APP_MANAGER_CALLSIGN = "org.rdk.AppManager";
+exports.STDOUT_TARGET = "-";
+exports.TEMP_FILE_SUFFIX = "~";
+exports.CONTENT_LAYER_MEDIA_TYPE_PREFIX = "application/vnd.rdk.package.content.layer.v1.";
