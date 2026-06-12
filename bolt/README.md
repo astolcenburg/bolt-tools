@@ -28,10 +28,32 @@ Run `bolt` with one of the commands described below:
 
 ```
 Usage:
-  bolt make <target> [--install] [--force-install] [--key=<key.pem>] [--cert=<cert.pem>]
-      Build a bolt package using <target>.bolt.json
+  bolt make <target|target.bolt.json> [--install] [--force-install] [--sbom[=full|with-gpl-sources|optimized]] [--no-sstate] [--key=<key.pem>] [--cert=<cert.pem>]
+      Build a bolt package using <target>.bolt.json, or the given .bolt.json file
       --install           Also installs the package into the Local Package Store
       --force-install     Installs the package, overwriting any existing package with the same name
+      --sbom[=MODE]       Generate SPDX SBOM (bitbake targets only). MODE is one of:
+                          full (default) - archive sources for every recipe regardless of
+                            license/role
+                          with-gpl-sources - archive sources only for GPL-family recipes
+                            whose binaries reach the image (skips native/nativesdk/cross
+                            /crosssdk/cross-canadian recipes)
+                          optimized - same bitbake configuration as with-gpl-sources,
+                            but post-processes the result: inlines external SPDX
+                            documents into a single image.spdx.json and copies only
+                            source archives for packages that reach the image.
+                            Requires SPDX 2.2 format; if problems arise, use
+                            with-gpl-sources instead.
+      --no-sstate         Disable sstate cache restoration; forces a full rebuild (bitbake targets only)
+      --key=<key.pem>     Sign the package using the given private key (PEM format)
+      --cert=<cert.pem>   Store the given certificate together with the signature (requires --key)
+
+  bolt edit <package.bolt> [--config=<config.json>] [--set=<json>] [--key=<key.pem>] [--cert=<cert.pem>]
+      Replace the package config in an existing bolt package, reusing its content layer
+      The output package is renamed if the resulting config changes the id or version
+      See https://github.com/rdkcentral/bolt-tools/blob/main/bolt/docs/edit.md
+      --config=<config.json>  Package config to write into the package (defaults to the original)
+      --set=<json>        JSON object whose properties override the base config
       --key=<key.pem>     Sign the package using the given private key (PEM format)
       --cert=<cert.pem>   Store the given certificate together with the signature (requires --key)
 
@@ -89,7 +111,7 @@ Usage:
       Use --direct to skip middleware detection and always run directly.
       If a .bolt file is provided, it is pushed to the device first and then run.
       --direct               Skip middleware detection and run the package directly using crun
-      The following options apply to direct mode only (a warning is printed if used in MW mode):
+      The following options apply to direct mode only (ignored with a warning in middleware mode):
       --develop              Run with elevated privileges to simplify debugging
       --clear-storage        Clear persistent storage before running the package
       --rw-overlay=<true/false>
@@ -99,7 +121,8 @@ Usage:
       --userns=<true/false>  Enable/disable user namespace
 
 Where:
-  target        Basename of a file named <target>.bolt.json, which defines build instructions
+  target        Basename of a file named <target>.bolt.json, which defines build instructions,
+                or a path to a .bolt.json file to build from directly
                 see https://github.com/rdkcentral/bolt-tools/blob/main/bolt/docs/make.md
 
   oci-image.tar An OCI-compliant image packaged as a tarball
@@ -120,12 +143,21 @@ Global options (can be used with any command):
   --verbose     Print detailed output during execution
 ```
 
-A detailed description of the `bolt extract` command can be found in the [docs/extract.md](docs/extract.md) file.
-A detailed description of the `bolt fetch` command can be found in the [docs/fetch.md](docs/fetch.md) file.
-A detailed description of the `bolt make` command can be found in the [docs/make.md](docs/make.md) file.
-A detailed description of the `bolt push` command can be found in the [docs/push.md](docs/push.md) file.
-A detailed description of the `bolt run` command can be found in the [docs/run.md](docs/run.md) file.
-A description of the local package store can be found in the [docs/local-package-store.md](docs/local-package-store.md) file.
+## Command Documentation
+
+Detailed descriptions of the individual commands are available in the [docs](docs) directory:
+
+| Command | Documentation | Description |
+|---------|---------------|-------------|
+| `bolt make` | [docs/make.md](docs/make.md) | Build a bolt package from instructions in a `.bolt.json` configuration file |
+| `bolt edit` | [docs/edit.md](docs/edit.md) | Produce a new bolt package from an existing one with a replaced package config |
+| `bolt extract` | [docs/extract.md](docs/extract.md) | Pull individual components out of an existing bolt package |
+| `bolt fetch` | [docs/fetch.md](docs/fetch.md) | Download a bolt package from a remote package store |
+| `bolt push` | [docs/push.md](docs/push.md) | Copy a bolt package to a remote device and optionally install it |
+| `bolt run` | [docs/run.md](docs/run.md) | Execute a bolt package on a remote device |
+
+The [docs/local-package-store.md](docs/local-package-store.md) file describes the local package
+store — the directory on the developer's machine where bolt packages are kept and resolved from.
 
 ## Package Signing
 

@@ -116,7 +116,7 @@ Usage:
       Use --direct to skip middleware detection and always run directly.
       If a .bolt file is provided, it is pushed to the device first and then run.
       --direct               Skip middleware detection and run the package directly using crun
-      The following options apply to direct mode only:
+      The following options apply to direct mode only (ignored with a warning in middleware mode):
       --develop              Run with elevated privileges to simplify debugging
       --clear-storage        Clear persistent storage before running the package
       --rw-overlay=<true/false>
