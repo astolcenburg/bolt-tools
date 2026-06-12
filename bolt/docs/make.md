@@ -32,7 +32,7 @@ bolt make <target|target.bolt.json> [--install] [--force-install] [--sbom[=full|
 | --cert=\<cert.pem\>     | Stores the given certificate together with the signature. The certificate must match the private key. Requires `--key`. |
 
 The `--key` and `--cert` options can also be set globally in `~/.bolt/config.json` so they don't need
-to be specified on every invocation. See the [Global Configuration](../README.md#global-configuration) section in the README.
+to be specified on every invocation. See [Global Configuration](global-configuration.md).
 
 These options simplify sharing packages across multiple build environments, which is necessary for [dependency handling](#dependency-handling).
 

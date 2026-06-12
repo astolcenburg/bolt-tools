@@ -158,6 +158,8 @@ Detailed descriptions of the individual commands are available in the [docs](doc
 
 The [docs/local-package-store.md](docs/local-package-store.md) file describes the local package
 store — the directory on the developer's machine where bolt packages are kept and resolved from.
+The [docs/global-configuration.md](docs/global-configuration.md) file describes the global
+configuration file (`~/.bolt/config.json`).
 
 ## Package Signing
 
@@ -176,38 +178,13 @@ Prepared com.rdkcentral.myapp+0.0.1.bolt package from com.rdkcentral.myapp.json 
 
 ## Global Configuration
 
-Bolt reads a global configuration file from `~/.bolt/config.json`. This allows you to set default
-values for options so you don't need to specify them on every invocation. Options provided on the
-command line always take precedence over the global configuration.
+Bolt reads a global configuration file from `~/.bolt/config.json`, which provides default values
+for options such as the signing key and certificate or the package store settings, so they don't
+need to be specified on every invocation. Options provided on the command line always take
+precedence over the global configuration.
 
-Supported options:
-
-| Option | Description                                      |
-|--------|--------------------------------------------------|
-| `key`  | Default path to the RSA private key (PEM format) |
-| `cert` | Default path to the X.509 certificate (PEM format) |
-| `packageStore*` | Package store settings used by `bolt fetch` (`packageStoreURL`, `packageStoreType`, etc.). See [docs/fetch.md](docs/fetch.md) |
-
-Example `~/.bolt/config.json`:
-```json
-{
-  "key": "/home/user/.bolt/signing.key.pem",
-  "cert": "/home/user/.bolt/signing.cert.pem"
-}
-```
-
-Relative paths are resolved relative to the directory containing the config file (`~/.bolt/`),
-so the example above can be simplified to:
-```json
-{
-  "key": "signing.key.pem",
-  "cert": "signing.cert.pem",
-  "packageStoreURL": "https://packages.example.com/bolts"
-}
-```
-
-With this configuration in place, `bolt make` and `bolt pack` will sign packages automatically
-without requiring `--key` and `--cert` on every invocation.
+The supported options and example configurations are described in
+[docs/global-configuration.md](docs/global-configuration.md).
 
 ## Example
 
