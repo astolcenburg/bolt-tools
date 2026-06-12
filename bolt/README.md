@@ -160,21 +160,8 @@ The [docs/local-package-store.md](docs/local-package-store.md) file describes th
 store — the directory on the developer's machine where bolt packages are kept and resolved from.
 The [docs/global-configuration.md](docs/global-configuration.md) file describes the global
 configuration file (`~/.bolt/config.json`).
-
-## Package Signing
-
-Both `bolt pack` and `bolt make` support optional package signing. When `--key=<key.pem>` is provided,
-a [cosign-compatible](https://github.com/rdkcentral/oci-package-spec/blob/main/format.md#signature-manifest)
-signature manifest is embedded in the bolt package alongside the regular package manifest.
-
-Optionally, `--cert=<cert.pem>` embeds the matching X.509 certificate in the signature layer.
-The certificate must correspond to the provided private key — a mismatch causes the command to abort.
-
-Example:
-```
-$ bolt pack com.rdkcentral.myapp.json myapp.tgz --key=signing.key.pem --cert=signing.cert.pem
-Prepared com.rdkcentral.myapp+0.0.1.bolt package from com.rdkcentral.myapp.json and myapp.tgz
-```
+The [docs/package-signing.md](docs/package-signing.md) file describes how packages are signed
+using the `--key` and `--cert` options.
 
 ## Global Configuration
 
