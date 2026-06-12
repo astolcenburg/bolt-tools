@@ -9,16 +9,23 @@ mature on compatible devices.
 ## Installation
 
 Bolt is a Node.js script and requires no installation. To fully utilize it, you'll need to install the following command-line tools:
-* node
-* tar
-* rsync
-* umoci
-* mkfs.erofs
-* fsck.erofs
-* veritysetup
-* zip
-* ssh
-* scp
+
+| Tool | Provided by | Minimum version | Recommended version |
+|------|-------------|-----------------|---------------------|
+| node | [Node.js](https://nodejs.org/) | 16.6.0 | 16.20.2 |
+| tar | [GNU tar](https://www.gnu.org/software/tar/) | 1.27 (with zstd support) | 1.30 (with zstd support) |
+| unzip | [Info-ZIP](https://infozip.sourceforge.net/) | 6.0 | 6.0 |
+| rsync | [rsync](https://rsync.samba.org/) | 3.0.0 | 3.2.7 |
+| umoci | [umoci](https://umo.ci/) | 0.4.7 | 0.4.7 |
+| mkfs.erofs / fsck.erofs | [erofs-utils](https://erofs.docs.kernel.org/) | 1.7 | 1.7.1 |
+| veritysetup | [cryptsetup](https://gitlab.com/cryptsetup/cryptsetup) | 2.0.0 | 2.4.3 |
+| ssh / scp | [OpenSSH](https://www.openssh.org/) | 7.0 | 8.2 |
+
+The recommended versions are the ones the tool is regularly tested with.
+
+Additionally, if the optional [ralfpack](https://github.com/rdkcentral/ralfpack) tool is found on
+the `PATH`, `bolt pack` uses it instead of `mkfs.erofs` and `veritysetup` to create and sign
+packages.
 
 To use the tool from anywhere on your system, add the [bin](bin) directory to your `PATH` environment variable.
 
