@@ -36,7 +36,7 @@ function push(remoteName, pkg, options) {
   }
 }
 
-function findPackage(pkgParam, workDir, locations) {
+function findPackage(pkgParam, workDir, locations, searchedStoreDirs) {
   let result = Package.fromPath(pkgParam, workDir);
 
   if (result) return result;
@@ -51,8 +51,9 @@ function findPackage(pkgParam, workDir, locations) {
       locations.push(fileName);
     }
 
-    const packageStore = PackageStore.find(workDir);
+    const packageStore = PackageStore.find(workDir, searchedStoreDirs);
     if (packageStore) {
+      searchedStoreDirs?.splice(0);
       result = packageStore.getPackage(pkgParam);
       if (result) return result;
       locations.push(packageStore.generatePackagePath(pkgParam));
@@ -64,10 +65,15 @@ function findPackage(pkgParam, workDir, locations) {
 
 function pushCommand(remoteName, pkgParam, workDir, options) {
   const pkgSearchLocations = [];
-  const pkg = findPackage(pkgParam, workDir, pkgSearchLocations);
+  const searchedStoreDirs = [];
+  const pkg = findPackage(pkgParam, workDir, pkgSearchLocations, searchedStoreDirs);
 
   if (!pkg) {
-    throw new Error(`Package ${pkgParam} not found, tried:\n${pkgSearchLocations.join('\n')}`);
+    let message = `Package ${pkgParam} not found, tried:\n${pkgSearchLocations.join('\n')}`;
+    if (searchedStoreDirs.length > 0) {
+      message += `\nNo local package store found. Searched in:\n${searchedStoreDirs.join('\n')}`;
+    }
+    throw new Error(message);
   }
 
   const remote = new Remote(remoteName);

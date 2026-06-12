@@ -25,12 +25,13 @@ const PACKAGE_STORE_DIR = 'bolts';
 const MAX_DEPTH = 100;
 
 class PackageStore {
-  static find(workDir) {
+  static find(workDir, searched) {
     let base = process.env.BUILDDIR ?? process.cwd();
     let foundPath;
 
     for (let i = 0; i < MAX_DEPTH; ++i) {
       const path = resolve(base + '/' + PACKAGE_STORE_DIR);
+      searched?.push(path);
 
       if (statSync(path, { throwIfNoEntry: false })?.isDirectory()) {
         foundPath = path;

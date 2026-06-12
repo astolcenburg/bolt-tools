@@ -146,10 +146,11 @@ async function makeCommand(packageAlias, workDir, options) {
 
   const packageConfigBuilder = new PackageConfigBuilder(packageConfig);
   packageConfigBuilder.resolveAutoValues(packageConfigStore.getPath());
-  const packageStore = PackageStore.find(workDir);
+  const searchedStoreDirs = [];
+  const packageStore = PackageStore.find(workDir, searchedStoreDirs);
 
   if (options.install && !packageStore) {
-    throw new Error(`Package store not found!`);
+    throw new Error(`Could not find the local package store. Searched in:\n${searchedStoreDirs.join('\n')}`);
   }
 
   let contentFile;

@@ -219,9 +219,10 @@ async function fetch(packageName, options) {
     throw new Error('No package store URL configured. Set "packageStoreURL" in ~/.bolt/config.json');
   }
 
-  const packageStore = PackageStore.find(process.cwd());
+  const searchedStoreDirs = [];
+  const packageStore = PackageStore.find(process.cwd(), searchedStoreDirs);
   if (!packageStore) {
-    throw new Error('Local package store not found');
+    throw new Error(`Could not find the local package store. Searched in:\n${searchedStoreDirs.join('\n')}`);
   }
 
   const packageFileName = Package.isPackageFileName(packageName)
