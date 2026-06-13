@@ -35,7 +35,9 @@ Run `bolt` with one of the commands described below:
 
 ```
 Usage:
-  bolt make <target|target.bolt.json> [--install] [--force-install] [--sbom[=full|with-gpl-sources|optimized]] [--no-sstate] [--key=<key.pem>] [--cert=<cert.pem>]
+  bolt make <target|target.bolt.json> [--install] [--force-install]
+                                       [--sbom[=full|with-gpl-sources|optimized]] [--no-sstate]
+                                       [--release] [--key=<key.pem>] [--cert=<cert.pem>]
       Build a bolt package using <target>.bolt.json, or the given .bolt.json file
       --install           Also installs the package into the Local Package Store
       --force-install     Installs the package, overwriting any existing package with the same name
@@ -52,6 +54,8 @@ Usage:
                             Requires SPDX 2.2 format; if problems arise, use
                             with-gpl-sources instead.
       --no-sstate         Disable sstate cache restoration; forces a full rebuild (bitbake targets only)
+      --release           Fail when the repository is not in a release state or any dependency
+                          is not a release package version
       --key=<key.pem>     Sign the package using the given private key (PEM format)
       --cert=<cert.pem>   Store the given certificate together with the signature (requires --key)
 

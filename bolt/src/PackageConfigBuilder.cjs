@@ -19,6 +19,7 @@
 
 const { writeFileSync } = require('node:fs');
 const { exec } = require('./utils.cjs');
+const { PackageConfig } = require('./PackageConfig.cjs');
 
 const RELEASE_BRANCH_PREFIX = 'release/';
 
@@ -66,7 +67,7 @@ class PackageConfigBuilder {
 
   updateVersionNameIfNotSpecified(repoPath) {
     if (!this.originalVersionName || this.originalVersionName === "develop") {
-      this.versionName = exec('git describe --dirty 2>/dev/null || echo develop', { cwd: repoPath }).trim();
+      this.versionName = exec('git describe --tags --dirty --always 2>/dev/null || echo develop', { cwd: repoPath }).trim();
       this.updateVersionName();
     }
 
@@ -137,6 +138,10 @@ class PackageConfigBuilder {
     }
 
     return this;
+  }
+
+  create() {
+    return new PackageConfig(this.data);
   }
 
   store(path) {

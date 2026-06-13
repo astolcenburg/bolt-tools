@@ -146,6 +146,7 @@ async function makeCommand(packageAlias, workDir, options) {
 
   const packageConfigBuilder = new PackageConfigBuilder(packageConfig);
   packageConfigBuilder.resolveAutoValues(packageConfigStore.getPath());
+  packageConfigBuilder.updateVersionNameIfNotSpecified(packageConfigStore.getPath());
   const searchedStoreDirs = [];
   const packageStore = PackageStore.find(workDir, searchedStoreDirs);
 
@@ -164,6 +165,14 @@ async function makeCommand(packageAlias, workDir, options) {
     throw new Error(`--no-sstate is only supported for bitbake targets`);
   }
 
+  if (options.release) {
+    const updatedPackageConfig = packageConfigBuilder.create();
+    if (!updatedPackageConfig.isReleaseVersion()) {
+      throw new Error(`Repository ${packageConfigStore.getPath()} is not in a release state: ` +
+        `package version is ${updatedPackageConfig.getVersion()} but version name is ${updatedPackageConfig.getVersionName()}`);
+    }
+  }
+
   if (packageBoltConfig?.bitbake?.image) {
     const packageRootfsDir = `${workDir}/${packageConfig.getFullName()}-rootfs`;
     const packageLayerArchive = `${workDir}/${packageConfig.getFullName()}-layer.tgz`;
@@ -176,6 +185,14 @@ async function makeCommand(packageAlias, workDir, options) {
     const last = packages.pop();
 
     assert(last.getFullName() === packageConfig.getFullName());
+
+    if (options.release) {
+      for (const pkg of packages) {
+        if (!pkg.isReleaseVersion()) {
+          throw new Error(`Non-release dependency detected: ${pkg.getFullName()} (version name: ${pkg.getVersionName()})`);
+        }
+      }
+    }
 
     contentFile = packageRootfsDir + ".tgz";
     imageTarPath = bitbakeMakeOCIImage(packageBoltConfig.bitbake, options, workDir);
@@ -221,9 +238,7 @@ async function makeCommand(packageAlias, workDir, options) {
 
   if (contentFile) {
     const packageConfigPath = `${workDir}/${packageConfig.getFullName()}.json`;
-    packageConfigBuilder
-      .updateVersionNameIfNotSpecified(packageConfigStore.getPath())
-      .store(packageConfigPath);
+    packageConfigBuilder.store(packageConfigPath);
 
     if (options.sbom) {
       const imageName = packageBoltConfig.bitbake.image;
@@ -321,6 +336,10 @@ exports.makeOptions = {
 
   "no-sstate"(params, result) {
     return (result.noSstate = (params.options["no-sstate"] === ''));
+  },
+
+  release(params, result) {
+    return (result.release = (params.options.release === ''));
   },
 
   "force-install"(params, result) {

@@ -8,7 +8,9 @@ by using instructions defined in `bolt.json` configuration files.
 ## Usage
 
 ```
-bolt make <target|target.bolt.json> [--install] [--force-install] [--sbom[=full|with-gpl-sources|optimized]] [--no-sstate] [--key=<key.pem>] [--cert=<cert.pem>]
+bolt make <target|target.bolt.json> [--install] [--force-install]
+                                     [--sbom[=full|with-gpl-sources|optimized]] [--no-sstate]
+                                     [--release] [--key=<key.pem>] [--cert=<cert.pem>]
 ```
 
 - `<target>` corresponds to a file named `<target>.bolt.json`. Example: `bolt make myapp` looks for `myapp.bolt.json`, located as described in the [locating bolt.json files](#locating-boltjson-files) section.
@@ -28,6 +30,7 @@ bolt make <target|target.bolt.json> [--install] [--force-install] [--sbom[=full|
 | --force-install         | Same as `--install`, but overwrites any existing package with the same name.         |
 | --sbom\[=MODE\]         | Generates a SPDX SBOM during the bitbake build. `MODE` is one of `full` (default when no value is given), `with-gpl-sources`, or `optimized`. See [SBOM Generation](#sbom-generation). Only valid for [`bitbake`](#bitbake) targets; using it with a [`direct`](#direct) target causes `bolt make` to fail. |
 | --no-sstate             | Passes `--no-setscene` to `bitbake`, disabling sstate cache restoration so every task is re-executed. Only valid for [`bitbake`](#bitbake) targets; using it with a [`direct`](#direct) target causes `bolt make` to fail. |
+| --release               | Fails the build when the repository is not in a release state or when any dependency package is not a release version. See [Release Builds](#release-builds). |
 | --key=\<key.pem\>       | Signs the package using the specified RSA private key (PEM format). Produces a [cosign-compatible](https://github.com/rdkcentral/oci-package-spec/blob/main/format.md#signature-manifest) signature manifest inside the bolt package. |
 | --cert=\<cert.pem\>     | Stores the given certificate together with the signature. The certificate must match the private key. Requires `--key`. |
 
@@ -162,6 +165,33 @@ Example config using automatic versioning:
   }
 }
 ```
+
+## Release Builds
+
+When `--release` is passed, `bolt make` verifies that the package being built and all of its
+dependencies are proper release versions, and fails the build when they are not.
+
+A package is considered a release version when the `versionName` in its package config equals
+its `version`. For the package being built, `bolt make` derives the `versionName` from
+`git describe --tags --dirty --always` when it is not specified explicitly (or is set to
+`develop`), so it equals the version exactly when the package is built from a clean working tree
+checked out at the version tag. When no tag is reachable, the abbreviated commit hash is used
+instead (with a `-dirty` suffix when the working tree has uncommitted changes), and `develop` is
+used only when the `.bolt.json` file is not inside a git repository (or the repository has no
+commits yet). For dependency packages, the `versionName` embedded in the package is compared;
+a package without any `versionName` is treated as a release version.
+
+The following is verified:
+
+1. **The repository is in a release state** — the `versionName` of the package being built must
+   equal its resolved `version`. In practice this means the repository containing the
+   `.bolt.json` file is checked out at a tag matching the package version and has no
+   uncommitted changes.
+2. **All dependencies are release versions** — every package from the
+   [dependency list](#dependency-handling) must be a release version. The error reports the
+   first detected non-release package together with its version name. This check applies to
+   [`bitbake`](#bitbake) targets only; [`direct`](#direct) targets do not resolve dependencies
+   during the build, so only the repository state is verified for them.
 
 ## SBOM Generation
 
