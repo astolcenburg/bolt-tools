@@ -17,7 +17,7 @@
  * limitations under the License.
 */
 
-const { renameSync, copyFileSync, linkSync, unlinkSync, mkdtempSync, statSync, lstatSync, rmSync, realpathSync } = require('node:fs');
+const { renameSync, copyFileSync, linkSync, unlinkSync, mkdtempSync, statSync, lstatSync, rmSync, realpathSync, lutimesSync, readdirSync } = require('node:fs');
 const { join, dirname, basename, isAbsolute, resolve, relative, sep } = require('node:path');
 const { execSync, execFileSync } = require('node:child_process');
 const config = require('./config.cjs');
@@ -117,24 +117,46 @@ function assertFile(path) {
   }
 }
 
-function removeUnder(baseDir, relPath) {
-  const base = realpathSync(resolve(baseDir));
-  const target = resolve(base, relPath);
-
-  let realTarget;
+function resolveUnder(baseDir, relPath) {
+  let base, realTarget;
   try {
+    base = realpathSync(resolve(baseDir));
+    const target = resolve(base, relPath);
     realTarget = join(realpathSync(dirname(target)), basename(target));
   } catch (err) {
-    if (err.code === 'ENOENT') return false;
+    if (err.code === 'ENOENT') return null;
     throw err;
   }
 
   const rel = relative(base, realTarget);
   if (rel === '' || rel === '..' || rel.startsWith(`..${sep}`) || isAbsolute(rel)) {
-    throw new Error(`Refusing to remove ${JSON.stringify(relPath)}: resolves to or outside ${baseDir}`);
+    throw new Error(`Path ${JSON.stringify(relPath)} resolves to or outside ${baseDir}`);
   }
-  if (lstatSync(realTarget, { throwIfNoEntry: false })) {
+  return realTarget;
+}
+
+function removeUnder(baseDir, relPath) {
+  const realTarget = resolveUnder(baseDir, relPath);
+  if (realTarget && lstatSync(realTarget, { throwIfNoEntry: false })) {
     rmSync(realTarget, { recursive: true, force: true });
+    return true;
+  }
+  return false;
+}
+
+function touchTree(target, now = new Date()) {
+  lutimesSync(target, now, now);
+  if (lstatSync(target).isDirectory()) {
+    for (const entry of readdirSync(target)) {
+      touchTree(join(target, entry), now);
+    }
+  }
+}
+
+function touchUnder(baseDir, relPath) {
+  const realTarget = resolveUnder(baseDir, relPath);
+  if (realTarget && lstatSync(realTarget, { throwIfNoEntry: false })) {
+    touchTree(realTarget);
     return true;
   }
   return false;
@@ -150,3 +172,5 @@ exports.makeWorkDir = makeWorkDir;
 exports.resolvePath = resolvePath;
 exports.assertFile = assertFile;
 exports.removeUnder = removeUnder;
+exports.resolveUnder = resolveUnder;
+exports.touchUnder = touchUnder;

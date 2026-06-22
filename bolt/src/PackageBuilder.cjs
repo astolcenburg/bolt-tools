@@ -17,8 +17,11 @@
  * limitations under the License.
 */
 
-const { readFileSync } = require('node:fs');
-const { exec, removeUnder } = require('./utils.cjs');
+const { lstatSync, readFileSync } = require('node:fs');
+const { join } = require('node:path');
+const { exec, execv, removeUnder, resolveUnder, touchUnder } = require('./utils.cjs');
+
+const SYNC_FLAGS = ['-rlpgoDX'];
 
 class PackageBuilder {
   constructor(workDir) {
@@ -28,24 +31,41 @@ class PackageBuilder {
     this.initialized = false;
   }
 
-  merge(rootfs, resetPaths = [], excludePaths = []) {
-    for (const path of excludePaths) {
+  merge(rootfs, override = [], exclude = []) {
+    for (const path of exclude) {
       if (!removeUnder(rootfs, path)) {
         console.warn(`Excluded path not found, skipping: ${path}`);
       }
     }
     if (this.initialized) {
-      for (const path of resetPaths) {
-        if (!removeUnder(`${this.workDir}/bundle/rootfs`, path)) {
-          console.warn(`Reset path not found, skipping: ${path}`);
+      const touched = [];
+      for (const path of override) {
+        if (touchUnder(rootfs, path)) {
+          touched.push(path);
+        } else {
+          console.warn(`Override path not found, skipping: ${path}`);
         }
       }
-      exec(`rsync -crlpgoDX ${rootfs}/ ${this.workDir}/bundle/rootfs`);
+      execv('rsync', [...SYNC_FLAGS, '-c', '--', `${rootfs}/`, join(this.workDir, 'bundle', 'rootfs')]);
+      this.resync(rootfs, touched, [...SYNC_FLAGS, '-t']);
       exec(`umoci repack --refresh-bundle --image ${this.workDir}/oci ${this.workDir}/bundle`);
     } else {
       exec(`umoci insert --rootless --image ${this.workDir}/oci ${rootfs} /`);
       exec(`umoci unpack --rootless --image ${this.workDir}/oci ${this.workDir}/bundle`);
       this.initialized = true;
+    }
+  }
+
+  resync(rootfs, paths, flags) {
+    const bundleRoot = join(this.workDir, 'bundle', 'rootfs');
+    for (const path of paths) {
+      const source = resolveUnder(rootfs, path);
+      const dest = resolveUnder(bundleRoot, path);
+      if (!source || !dest || !lstatSync(source, { throwIfNoEntry: false })?.isDirectory()) {
+        console.warn(`Resync path not found, skipping: ${path}`);
+        continue;
+      }
+      execv('rsync', [...flags, '--', `${source}/`, dest]);
     }
   }
 
