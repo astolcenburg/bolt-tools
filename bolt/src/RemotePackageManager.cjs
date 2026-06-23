@@ -26,19 +26,24 @@ class RemotePackageManager {
 
   isPackageInstalled(id, version) {
     try {
-      return this.remote.makeThunderRequest({
-        method: `${config.PACKAGE_MANAGER_CALLSIGN}.packageState`,
-        params: { packageId: id, version },
-      }) === "INSTALLED";
+      return this.makeRequest("packageState", { packageId: id, version }) === "INSTALLED";
     } catch (e) {
       return false;
     }
   }
 
   isActive() {
+    return this.getCallsign() !== null;
+  }
+
+  install(id, version, fileLocator) {
+    return this.makeRequest("install", { packageId: id, version, fileLocator });
+  }
+
+  callsignIsActive(callsign) {
     try {
       const status = this.remote.makeThunderRequest({
-        method: `Controller.status@${config.PACKAGE_MANAGER_CALLSIGN}`,
+        method: `Controller.status@${callsign}`,
       });
       return status[0].state === "activated";
     } catch (e) {
@@ -46,10 +51,27 @@ class RemotePackageManager {
     }
   }
 
-  install(id, version, fileLocator) {
+  getCallsign() {
+    if (this.callsign === undefined) {
+      this.callsign = null;
+      for (const callsign of config.PACKAGE_MANAGER_CALLSIGNS) {
+        if (this.callsignIsActive(callsign)) {
+          this.callsign = callsign;
+          break;
+        }
+      }
+    }
+    return this.callsign;
+  }
+
+  makeRequest(method, params) {
+    const callsign = this.getCallsign();
+    if (!callsign) {
+      throw new Error("No package manager is active on the device");
+    }
     return this.remote.makeThunderRequest({
-      method: `${config.PACKAGE_MANAGER_CALLSIGN}.install`,
-      params: { packageId: id, version, fileLocator },
+      method: `${callsign}.${method}`,
+      params,
     });
   }
 }

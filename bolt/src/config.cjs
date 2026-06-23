@@ -35,7 +35,10 @@ exports.AI2_MANAGERS_ENABLED_FILE = "/opt/ai2managers";
 exports.DEFAULT_UID = 34567;
 exports.DEFAULT_GID = 34567;
 exports.PROCESS_HOME_DIR = "/home";
-exports.PACKAGE_MANAGER_CALLSIGN = "org.rdk.PackageManagerRDKEMS";
+exports.PACKAGE_MANAGER_CALLSIGNS = [
+  "org.rdk.AppPackageManager",
+  "org.rdk.PackageManagerRDKEMS",
+];
 exports.APP_MANAGER_CALLSIGN = "org.rdk.AppManager";
 exports.STDOUT_TARGET = "-";
 exports.TEMP_FILE_SUFFIX = "~";
